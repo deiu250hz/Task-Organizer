@@ -1,0 +1,38 @@
+import type { Grid } from "../../types";
+
+// Cat, stage 2: bigger, cheek stripes and a rosy blush.
+// 32 rows of 32 palette keys ('.' is transparent). The face is a separate layer (faces/).
+export const CAT_STAGE_2_BODY: Grid = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  "........oo............oo........",
+  ".......offoo........ooffo.......",
+  ".......ofpffoo....ooffpfo.......",
+  ".......ofppooooooooooppfo.......",
+  ".......ofpooffffffffoopfo.......",
+  ".......ofofffdfddfdfffofo.......",
+  ".......ooffffffffffffffoo.......",
+  ".......offffffffffffffffo.......",
+  ".......offflllfffflllfffo.......",
+  ".......offlllllfflllllffo.......",
+  ".......oddlllllfflllllddo.......",
+  ".......oddfllllllllllfddo.......",
+  ".......offfffllllllfffffo.......",
+  ".......ooffffllllllffffo........",
+  ".....ooffoffffllllffffo.........",
+  "....ooffffooffffffffoo..........",
+  "....odfffooooooooooooo..........",
+  "....odddoooovvvvvvvvoo..........",
+  "...offfo..ofoooyyooofo..........",
+  "...odffo..odoffyyffodo..........",
+  "....oddfo.oofffoofffoo..........",
+  "....oddfdooofffoffffoo..........",
+  "....oofffdoooooofooooo..........",
+  ".....oofdocooccooccooco.........",
+  "......oooococccoccccoco.........",
+  ".........oooooooooooooo.........",
+  "................................",
+  "................................",
+];

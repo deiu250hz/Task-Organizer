@@ -1,10 +1,11 @@
+import type { Species } from "../../../domain/species";
 import type { Mood, Stage } from "../../../domain/types";
+
+// The Species type lives in the domain (the store needs it and must not import from components).
+export type { Species };
 
 /** Every sprite is a square grid of this many pixels per side. */
 export const GRID_SIZE = 32;
-
-/** The pets the app can show. Add a name here (and a registry entry) to add a species. */
-export type Species = "monkey";
 
 /** One colour per palette key. The key '.' is reserved for transparent and has no colour. */
 export type Palette = Readonly<Record<string, string>>;

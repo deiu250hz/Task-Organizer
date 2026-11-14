@@ -1,0 +1,38 @@
+import type { Grid } from "../../types";
+
+// Cat, stage 4: biggest, sparkly eyes, cream tail tip and tufted ears.
+// 32 rows of 32 palette keys ('.' is transparent). The face is a separate layer (faces/).
+export const CAT_STAGE_4_BODY: Grid = [
+  "......offoo..........ooffo......",
+  "......oppffoo......ooffppo......",
+  "......ofpcpffooooooffpcpfo......",
+  "......ofppoooffffffoooppfo......",
+  ".....offooffffffffffffooffo.....",
+  ".....ofooffffdfddfdffffoofo.....",
+  ".....ooofffffdfddfdfffffooo.....",
+  ".....ooffffffffffffffffffoo.....",
+  ".....offffffffffffffffffffo.....",
+  ".....offffllllffffllllffffo.....",
+  ".....offfllllllffllllllfffo.....",
+  ".....ofddllllllffllllllddfo.....",
+  ".....odddfllllllllllllfdddo.....",
+  "......offffffllllllffffffo......",
+  "......offfffllllllllfffffo......",
+  ".....vvofffffllllllfffffo.......",
+  "...oovvyooffffllllffffoo........",
+  "..oocvvcvoooffffffffooo.........",
+  "..odcccco.oooooooooooo..........",
+  "..odddoo.oovvvvvvvvvvoo.........",
+  ".offffo..ofooovyyvooofo.........",
+  ".offfo...offoooyyoooffo.........",
+  ".odffoo..odofffoofffodo.........",
+  ".oddddo..ofofffoofffofo.........",
+  "..oddffooooofffoofffooo.........",
+  "..offffdffoffffooffffo..........",
+  "...offfdoooooooooooooooo........",
+  "....odddococcccooccccoco........",
+  ".....oooococcococcoccoco........",
+  "........oooooooooooooooo........",
+  "................................",
+  "................................",
+];
