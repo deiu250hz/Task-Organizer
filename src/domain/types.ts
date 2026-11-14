@@ -28,6 +28,12 @@ export interface NewTask {
   difficulty: Difficulty;
 }
 
+/** An inclusive range of days chosen in the calendar. from <= to; a single day has from === to. */
+export interface DateSelection {
+  from: ISODate;
+  to: ISODate;
+}
+
 export interface Reward {
   xp: number;
   coins: number;

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { formatDayRange } from "../../domain/dates";
 import type { Difficulty } from "../../domain/types";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -12,18 +13,18 @@ export function QuickAdd() {
   // One narrow selector per field: this component re-renders only when these change.
   const addTask = useAppStore((s) => s.addTask);
   const today = useAppStore((s) => s.today);
+  const selection = useAppStore((s) => s.selection);
 
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>(1);
 
+  // New tasks take the days picked in the calendar, or today when nothing is selected.
+  const startDate = selection?.from ?? today;
+  const endDate = selection?.to ?? today;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); // stop the browser from reloading the page
-    const created = await addTask({
-      title,
-      startDate: today,
-      endDate: today,
-      difficulty,
-    });
+    const created = await addTask({ title, startDate, endDate, difficulty });
     // Keep what the user typed if the store rejected it, so nothing is lost.
     if (created) setTitle("");
   }
@@ -41,7 +42,11 @@ export function QuickAdd() {
         type="text"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        placeholder="Add a task for today…"
+        placeholder={
+          selection === null
+            ? "Add a task for today…"
+            : `Add a task for ${formatDayRange(startDate, endDate)}…`
+        }
         className="min-w-40 flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text placeholder:text-text-muted"
       />
 

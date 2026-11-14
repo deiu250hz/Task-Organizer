@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Panel } from "../layout/Panel";
-import { MOCK_PLAYER } from "../../mock/mockData";
+import { usePlayerProgress } from "../../store/selectors";
+import { useAppStore } from "../../store/useAppStore";
 
 interface StatTileProps {
   label: string;
@@ -17,8 +19,16 @@ function StatTile({ label, value, valueClass }: StatTileProps) {
 }
 
 export function CharacterPanel() {
-  const { level, xp, xpForNext, coins, streak } = MOCK_PLAYER;
-  const percent = Math.round((xp / xpForNext) * 100);
+  // Level, XP, coins and streak are derived from the ledger totals held in the store.
+  const { level, intoLevel, needed, coins, streak } = usePlayerProgress();
+  const loadProgress = useAppStore((s) => s.loadProgress);
+
+  // Load once on startup. Action functions keep the same identity, so this does not re-run.
+  useEffect(() => {
+    void loadProgress();
+  }, [loadProgress]);
+
+  const percent = Math.round((intoLevel / needed) * 100); // needed is always at least 100
 
   return (
     <Panel id="character-heading" title="Monkey">
@@ -36,7 +46,7 @@ export function CharacterPanel() {
           LVL {level}
         </span>
         <span className="font-pixel text-xs text-text-muted">
-          {xp} / {xpForNext} XP
+          {intoLevel} / {needed} XP
         </span>
       </div>
 
@@ -44,11 +54,16 @@ export function CharacterPanel() {
         role="progressbar"
         aria-label="Experience"
         aria-valuemin={0}
-        aria-valuemax={xpForNext}
-        aria-valuenow={xp}
+        aria-valuemax={needed}
+        aria-valuenow={intoLevel}
+        aria-valuetext={`${intoLevel} of ${needed} XP`}
         className="mt-2 h-3 overflow-hidden rounded-full border border-border bg-bg"
       >
-        <div className="h-full bg-xp" style={{ width: `${percent}%` }} />
+        {/* The width animates; the global reduced-motion rule in index.css turns that off. */}
+        <div
+          className="h-full bg-xp transition-[width] duration-500 ease-out"
+          style={{ width: `${percent}%` }}
+        />
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">

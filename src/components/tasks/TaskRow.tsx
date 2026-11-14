@@ -1,15 +1,9 @@
+import { formatDayRange } from "../../domain/dates";
 import type { Task } from "../../domain/types";
 
 export interface TaskRowProps {
   task: Task;
   onComplete: (id: number) => void;
-}
-
-// Raw ISO dates for now; nicer formatting arrives with date-fns in Phase 3.
-function dateLabel(task: Task): string {
-  return task.startDate === task.endDate
-    ? task.startDate
-    : `${task.startDate} – ${task.endDate}`;
 }
 
 export function TaskRow({ task, onComplete }: TaskRowProps) {
@@ -30,7 +24,9 @@ export function TaskRow({ task, onComplete }: TaskRowProps) {
           <span className="block truncate text-sm text-text group-has-[:checked]:text-text-muted group-has-[:checked]:line-through">
             {task.title}
           </span>
-          <span className="block text-xs text-text-muted">{dateLabel(task)}</span>
+          <span className="block text-xs text-text-muted">
+            {formatDayRange(task.startDate, task.endDate)}
+          </span>
         </span>
       </label>
     </li>

@@ -60,7 +60,7 @@ tasks-organizor/
 │  ├─ index.css                    # @import "tailwindcss"; theme tokens
 │  ├─ components/                  # AGENT
 │  │  ├─ layout/                   # TitleBar, Panel, CompactView
-│  │  ├─ calendar/                 # CalendarPanel (react-day-picker)
+│  │  ├─ calendar/                 # CalendarPanel (react-day-picker), dateAdapters.ts (the only Date <-> ISODate conversion)
 │  │  ├─ tasks/                    # TaskPanel, TaskRow, QuickAdd
 │  │  ├─ shop/                     # ShopPanel, ItemCard
 │  │  └─ character/
@@ -76,6 +76,7 @@ tasks-organizor/
 │  │  ├─ types.ts
 │  │  ├─ config.ts                 # every tunable number lives here
 │  │  ├─ dates.ts                  # ISODate helpers
+│  │  ├─ tasks.ts                  # tasksInRange, anyTaskOn
 │  │  ├─ rewards.ts                # rewardFor
 │  │  ├─ levels.ts                 # levelFromXp, xpForLevel, stageForLevel
 │  │  ├─ streak.ts                 # streakFrom
@@ -88,7 +89,9 @@ tasks-organizor/
 │  │  ├─ rewardRepo.ts
 │  │  └─ shopRepo.ts
 │  └─ store/                       # ANDREI
-│     └─ useAppStore.ts
+│     ├─ useAppStore.ts
+│     ├─ selectors.ts              # useVisibleTasks, useHasTaskOn (derive with useMemo, stable slices only)
+│     └─ __tests__/
 └─ src-tauri/                      # ANDREI
    ├─ Cargo.toml
    ├─ tauri.conf.json
@@ -162,7 +165,7 @@ Notes on the schema:
 | --- | --- |
 | Tasks on a day or range | `WHERE start_date <= :to AND end_date >= :from AND status != 'archived'` |
 | Totals | `SELECT COALESCE(SUM(xp),0) AS xp, COALESCE(SUM(coins),0) AS coins FROM reward_events` |
-| Active days for streak | `SELECT DISTINCT day FROM reward_events WHERE reason = 'task_done' AND day > :lastResetDay ORDER BY day DESC` |
+| Active days for streak | `SELECT DISTINCT day FROM reward_events WHERE reason = 'task_done' AND id > COALESCE((SELECT MAX(id) FROM reward_events WHERE reason = 'streak_reset'), 0) ORDER BY day DESC` (cut by ledger order, not by day, so a task completed on the same day as a reset still counts) |
 | Newly overdue | `WHERE status = 'active' AND end_date < :today AND overdue_flagged = 0` |
 
 ## 4. Domain layer
@@ -198,6 +201,9 @@ export interface NewTask {
   difficulty: Difficulty;
 }
 
+/** Days picked in the calendar, inclusive; from <= to, a single day has from === to. */
+export interface DateSelection { from: ISODate; to: ISODate; }
+
 export interface Reward { xp: number; coins: number; }
 export interface Totals { xp: number; coins: number; }
 
@@ -219,8 +225,14 @@ export type Equipped = Record<Slot, string | null>;   // slot -> assetKey
 ```ts
 // dates.ts
 toISODate(d: Date): ISODate                       // from LOCAL fields, never toISOString()
-addDays(day: ISODate, n: number): ISODate
-isBetween(day: ISODate, from: ISODate, to: ISODate): boolean
+addDays(day: ISODate, n: number): ISODate         // calendar arithmetic via date-fns; DST-safe
+isBetween(day: ISODate, from: ISODate, to: ISODate): boolean          // inclusive
+rangesOverlap(aFrom: ISODate, aTo: ISODate, bFrom: ISODate, bTo: ISODate): boolean   // inclusive
+formatDayRange(from: ISODate, to: ISODate): string                    // "16 Nov", "16 – 18 Nov"
+
+// tasks.ts
+tasksInRange(tasks: Task[], from: ISODate, to: ISODate): Task[]       // tasks overlapping the range
+anyTaskOn(tasks: Task[], day: ISODate): boolean                       // drives the calendar dots
 
 // rewards.ts
 rewardFor(difficulty: Difficulty, streakDays: number): Reward
@@ -254,7 +266,7 @@ canPurchase(item: Item, coins: number, level: number, owned: boolean):
 | Streak bonus | +10% XP per streak day, capped at +50%. Coins get no bonus. |
 | XP for next level | `round(100 * level^1.5)` |
 | Evolution stages | Stage 1 at level 1, stage 2 at level 5, stage 3 at level 10, stage 4 at level 25 |
-| Streak | Consecutive local days with at least one `task_done`, counted back from today or yesterday, stopping at the last `streak_reset` |
+| Streak | Consecutive local days with at least one `task_done`, counted back from today or yesterday, counting only `task_done` rows added after the last `streak_reset` (ledger order). The streak shown in the UI includes today; the XP bonus uses the streak before today, so every task completed on the same day gets the same bonus. |
 | Sleepy hour | 22 |
 
 ### Mood priority
@@ -317,7 +329,8 @@ Repository rules:
 - Rows are `snake_case`, domain objects are `camelCase`. Mapping happens in the repository and nowhere else.
 - SQLite has no boolean: map `0/1` to `boolean` in the repository.
 - Always use bound parameters (`$1`, `$2`), never string concatenation.
-- Atomic operations: the SQL plugin runs on a connection pool, so `BEGIN` and `COMMIT` sent as separate `execute()` calls may land on different connections. Verify how to get a real transaction before relying on one (Phase 2 investigation item).
+- Atomic operations: the SQL plugin runs on a connection pool, so `BEGIN` and `COMMIT` sent as separate `execute()` calls may land on different connections (confirmed in the plugin source, `tauri-plugin-sql` 2.6.0: each `execute` acquires its own pooled connection). A `BEGIN ... COMMIT` inside one `execute` is also unsafe, because a failing statement can return the connection to the pool with the transaction still open.
+- Decision (Phase 2): "must be atomic" is met with **ordered, idempotent, retry-safe writes** instead of one transaction. Each step is a single statement guarded so a retry finishes the work without repeating it. Example, `taskRepo.complete`: (1) insert the `task_done` row only if the task is active and has none yet, (2) mark the task done only if it is still active. If step 2 fails, calling `complete` again skips step 1 and finishes step 2, so the reward is paid once. Apply the same pattern to `reopen`, `purchase`, `setEquipped` and `flagOverdue`. A Rust command with a real sqlx transaction stays the fallback if a case cannot be made idempotent.
 
 ## 6. Character
 
@@ -404,6 +417,6 @@ Order rationale: phases 1–3 produce a usable task app before any game logic; p
 
 ## 9. Open items
 
-- Confirm the transaction approach for `tauri-plugin-sql` (Phase 2).
+- ~~Confirm the transaction approach for `tauri-plugin-sql` (Phase 2).~~ Decided: ordered, idempotent, retry-safe writes (see section 5, repository rules).
 - Decide whether `reopen` stays in v1 or completed tasks are final.
 - Tune `config.ts` after one week of real use.
