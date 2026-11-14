@@ -1,0 +1,38 @@
+import type { Grid } from "../../types";
+
+// Capuchin, stage 3: broad chest with a tan bib.
+// 32 rows of 32 palette keys ('.' is transparent). The face is a separate layer (faces/).
+export const STAGE_3_BODY: Grid = [
+  "................................",
+  "................................",
+  "............oooooooo............",
+  "..........ooddddddddoo..........",
+  ".......o.oddddddddddddo.o.......",
+  ".....oododdddddddddddddodoo.....",
+  "....oddooddddddddddddddooddo....",
+  "....odsoddddddddddddddddosdo....",
+  "....odsoddsssddddddsssddosdo....",
+  "....odsoddssssssssssssddosdo....",
+  "....oddodssssssssssssssdoddo....",
+  ".....ooodssssssssssssssdooo.....",
+  ".......odssssttttttssssdo.......",
+  ".......odsssttttttttsssdo.......",
+  "........odsssttttttsssdo........",
+  ".......ooodsssttttsssdooo.......",
+  "....ooooffoossssssssooffo.......",
+  "...occcofffooooddoooofffo.......",
+  "..odcccofffocccoocccofffo.......",
+  "..oddcoffffoccccccccoffffo......",
+  "..oddooffffoccccccccoffffo......",
+  ".odddo.offfoccccccccofffo.......",
+  "..oddo.offfofccccccfofffo.......",
+  "..odddooccfoffccccffofcco.......",
+  "..odddoccccffffccffffcccc.......",
+  "..ooddddccooffffffffoocc........",
+  "...oddddooddooffffooddoo........",
+  "....ooddodddddoooodddddo........",
+  ".....ooooddddddooddddddo........",
+  "........oodddoo..oodddoo........",
+  "..........ooo......ooo..........",
+  "................................",
+];

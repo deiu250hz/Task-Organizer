@@ -1,0 +1,38 @@
+import type { Grid } from "../../types";
+
+// Cat, stage 3: bigger, eyelashes and a bow on the tail.
+// 32 rows of 32 palette keys ('.' is transparent). The face is a separate layer (faces/).
+export const CAT_STAGE_3_BODY: Grid = [
+  "................................",
+  ".......oo..............oo.......",
+  "......offoo..........ooffo......",
+  "......ofpffoo......ooffpfo......",
+  "......ofpppfoooooooofpppfo......",
+  "......ofppooffffffffooppfo......",
+  "......ofoofffdfddfdfffoofo......",
+  "......oooffffdfddfdffffooo......",
+  "......oofffffdffffdfffffoo......",
+  "......offffffffffffffffffo......",
+  "......offfllllffffllllfffo......",
+  "......offflllllfflllllfffo......",
+  "......oddflllllfflllllfddo......",
+  "......oddfllllllllllllfddo......",
+  "......offffffllllllffffffo......",
+  ".......offffllllllllffffo.......",
+  ".....ovvoffffllllllffffo........",
+  "....ofvvyoffffllllffffo.........",
+  "...odfvvfvooffffffffoo..........",
+  "...odfffoooooooooooooo..........",
+  "..ofddfooofovvvvvvvvofo.........",
+  "..offfo..offoooyyoooffo.........",
+  "..offfo..oddofoyyofoddo.........",
+  "..odfdo..ofofffoofffofo.........",
+  "...oddfooooofffoofffoo..........",
+  "...offffdfoofffoffffoo..........",
+  "...oofffdoooooooooooooo.........",
+  "....ooddoccocccoocccocco........",
+  "......oooccocococcococco........",
+  ".........oooooooooooooo.........",
+  "................................",
+  "................................",
+];

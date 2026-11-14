@@ -61,6 +61,122 @@
   }
 }
 
+/*
+ * Pet animations. Only transform and opacity change, always in whole sprite pixels (--px) and in
+ * discrete steps, so the pixel art never blurs. Loops sit on .pet (picked by data-mood); one-shots
+ * sit on .pet-shot (picked by data-kind, length from --shot-ms). The reduced-motion rule below
+ * cuts every animation to a single instant, so one-shots still end and the queue still drains.
+ */
+.pet {
+  position: relative;
+}
+
+.pet-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.pet[data-mood="idle"] {
+  animation: pet-loop-idle 1.4s steps(2, jump-none) infinite alternate;
+}
+.pet[data-mood="happy"] {
+  animation: pet-loop-happy 1s steps(1, end) infinite;
+}
+.pet[data-mood="sad"] {
+  animation: pet-loop-sad 2.4s steps(1, end) infinite;
+}
+.pet[data-mood="sleepy"] {
+  animation: pet-loop-sleepy 2.6s steps(2, jump-none) infinite alternate;
+}
+/* While a one-shot plays it takes over; the loop starts again afterwards. */
+.pet[data-shot] {
+  animation: none;
+}
+
+@keyframes pet-loop-idle {
+  from { transform: translateY(0); }
+  to { transform: translateY(calc(var(--px) * -1)); }
+}
+@keyframes pet-loop-happy {
+  0%, 45% { transform: translateY(0); }
+  45.01%, 65% { transform: translateY(calc(var(--px) * -3)); }
+  65.01%, 100% { transform: translateY(0); }
+}
+@keyframes pet-loop-sad {
+  0%, 60% { transform: translateY(var(--px)); }
+  60.01%, 100% { transform: translateY(calc(var(--px) * 2)); }
+}
+@keyframes pet-loop-sleepy {
+  from { transform: translateY(0); }
+  to { transform: translateY(var(--px)); }
+}
+
+.pet-shot {
+  position: absolute;
+  inset: 0;
+  animation-duration: var(--shot-ms, 0ms);
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+  animation-timing-function: steps(1, end);
+}
+.pet-shot[data-kind="celebrate"] { animation-name: pet-shot-celebrate; }
+.pet-shot[data-kind="levelUp"] { animation-name: pet-shot-level-up; }
+.pet-shot[data-kind="evolve"] { animation-name: pet-shot-evolve; }
+.pet-shot[data-kind="equip"] { animation-name: pet-shot-equip; }
+
+/* Evolve shows the old stage for the first half and the new stage for the second half. */
+.pet-evolve-out,
+.pet-evolve-in {
+  animation-duration: var(--shot-ms, 0ms);
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+  animation-timing-function: steps(1, end);
+}
+.pet-evolve-out { animation-name: pet-evolve-out; }
+.pet-evolve-in { animation-name: pet-evolve-in; }
+
+/* Two hops. */
+@keyframes pet-shot-celebrate {
+  0%, 10% { transform: translateY(0); }
+  10.01%, 25% { transform: translateY(calc(var(--px) * -4)); }
+  25.01%, 40% { transform: translateY(0); }
+  40.01%, 55% { transform: translateY(calc(var(--px) * -4)); }
+  55.01%, 100% { transform: translateY(0); }
+}
+/* Hop and blink. */
+@keyframes pet-shot-level-up {
+  0%, 15% { transform: translateY(0); opacity: 1; }
+  15.01%, 30% { transform: translateY(calc(var(--px) * -3)); opacity: 0.35; }
+  30.01%, 45% { transform: translateY(0); opacity: 1; }
+  45.01%, 60% { transform: translateY(calc(var(--px) * -3)); opacity: 0.35; }
+  60.01%, 75% { transform: translateY(0); opacity: 1; }
+  75.01%, 100% { transform: translateY(0); opacity: 1; }
+}
+/* Three flashes. The wrapper runs the whole duration, so animationend fires here, last. */
+@keyframes pet-shot-evolve {
+  0%, 20% { opacity: 1; }
+  20.01%, 30% { opacity: 0.2; }
+  30.01%, 40% { opacity: 1; }
+  40.01%, 50% { opacity: 0.2; }
+  50.01%, 60% { opacity: 1; }
+  60.01%, 70% { opacity: 0.2; }
+  70.01%, 100% { opacity: 1; }
+}
+@keyframes pet-evolve-out {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+@keyframes pet-evolve-in {
+  0%, 50% { opacity: 0; }
+  50.01%, 100% { opacity: 1; }
+}
+/* A small hop (fired when an accessory is equipped, from Phase 6). */
+@keyframes pet-shot-equip {
+  0%, 20% { transform: translateY(0); }
+  20.01%, 50% { transform: translateY(calc(var(--px) * -2)); }
+  50.01%, 100% { transform: translateY(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

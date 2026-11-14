@@ -8,6 +8,8 @@ export interface RewardRepo {
   /** Days with a task_done event after the last streak_reset, newest first. */
   activeDaysSinceLastReset(): Promise<ISODate[]>;
   completedCount(day: ISODate): Promise<number>;
+  /** When the last task was completed, in epoch milliseconds; null if none ever was. Drives the pet's happy hour. */
+  lastCompletionAt(): Promise<number | null>;
 }
 
 async function totals(): Promise<Totals> {
@@ -42,4 +44,23 @@ async function completedCount(day: ISODate): Promise<number> {
   return rows[0].n;
 }
 
-export const rewardRepo: RewardRepo = { totals, activeDaysSinceLastReset, completedCount };
+// created_at is an audit timestamp everywhere else. This is the one place it drives behaviour:
+// the "happy for an hour after a task" window. ISO timestamps sort like time, so MAX works,
+// and epoch milliseconds make the later comparison independent of time zones and DST.
+async function lastCompletionAt(): Promise<number | null> {
+  const db = await getDb();
+  const rows = await db.select<{ last: string | null }[]>(
+    `SELECT MAX(created_at) AS last FROM reward_events WHERE reason = 'task_done'`,
+  );
+  const last = rows[0].last;
+  if (last === null) return null;
+  const ms = Date.parse(last);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+export const rewardRepo: RewardRepo = {
+  totals,
+  activeDaysSinceLastReset,
+  completedCount,
+  lastCompletionAt,
+};

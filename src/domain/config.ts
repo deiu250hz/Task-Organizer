@@ -21,3 +21,9 @@ export const LEVEL_XP_EXPONENT = 1.5;
 
 /** First level of each evolution stage: stage 1 from level 1, stage 2 from 5, stage 3 from 10, stage 4 from 25. */
 export const STAGE_MIN_LEVELS = [1, 5, 10, 25] as const;
+
+/** From this local hour on (22 = 10 pm), a pet that has done nothing today gets sleepy. */
+export const SLEEPY_HOUR = 22;
+
+/** How long the pet stays happy after a task is completed, in minutes. */
+export const HAPPY_AFTER_COMPLETION_MINUTES = 60;

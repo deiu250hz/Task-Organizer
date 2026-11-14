@@ -66,12 +66,15 @@ tasks-organizor/
 │  │  └─ character/
 │  │     ├─ Character.tsx          # implements CharacterProps
 │  │     ├─ PixelSprite.tsx        # string grid + palette -> <rect>s
+│  │     ├─ composeLayers.ts       # stacks body, face, accessories into one grid
+│  │     ├─ oneShotTiming.ts       # one-shot durations shared by the CSS and the safety timeout
 │  │     ├─ useCharacterMachine.ts # animation state machine (UI-only)
-│  │     ├─ palette.ts
-│  │     ├─ anchors.ts             # slot anchor per stage
-│  │     ├─ stages/                # stage1.ts .. stage4.ts (body grids)
-│  │     ├─ faces/                 # idle, happy, sad, sleepy
-│  │     └─ accessories/           # one file per item asset_key
+│  │     ├─ species/               # one folder per pet; the registry in index.ts maps Species to its art
+│  │     │  ├─ types.ts            # Species, Palette, Grid, SpeciesArt, GRID_SIZE
+│  │     │  ├─ index.ts            # SPECIES registry
+│  │     │  └─ monkey/             # palette.ts, stages/stage1..4.ts (bodies), faces/idle|happy|sad|sleepy.ts (overlays per stage)
+│  │     ├─ anchors.ts             # slot anchor per stage (Phase 6)
+│  │     └─ accessories/           # one file per item asset_key (Phase 6)
 │  ├─ domain/                      # ANDREI
 │  │  ├─ types.ts
 │  │  ├─ config.ts                 # every tunable number lives here
@@ -151,9 +154,20 @@ CREATE INDEX idx_tasks_status  ON tasks(status, end_date);
 CREATE INDEX idx_rewards_day   ON reward_events(day);
 ```
 
+`src-tauri/migrations/002_settings.sql` (preferences, not progress; nothing here is a counter):
+
+```sql
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+```
+
+The chosen pet is saved under the key `species` (`monkey` or `cat`). A missing or unknown value means "not chosen yet" and shows the first-run picker.
+
 Notes on the schema:
 
-- No time-of-day field exists on tasks. `created_at` columns are audit timestamps and never drive behaviour.
+- No time-of-day field exists on tasks. `created_at` columns are audit timestamps and never drive behaviour, with one deliberate exception: the time of the last `task_done` event (`rewardRepo.lastCompletionAt`) decides how long the pet stays happy after a completed task (Phase 5). It is compared in epoch milliseconds, so time zones and DST do not matter.
 - `day` on `reward_events` is written by the app in local time. Streak and "completed today" queries group by `day`, so SQL never converts time zones.
 - `ISODate` strings compare correctly as text, so `start_date <= :day AND end_date >= :day` works without date functions.
 - A task is overdue when `status = 'active' AND end_date < :today`.
@@ -233,6 +247,12 @@ formatDayRange(from: ISODate, to: ISODate): string                    // "16 Nov
 // tasks.ts
 tasksInRange(tasks: Task[], from: ISODate, to: ISODate): Task[]       // tasks overlapping the range
 anyTaskOn(tasks: Task[], day: ISODate): boolean                       // drives the calendar dots
+canStartOn(startDate: ISODate, today: ISODate): boolean               // a new task must start today or later
+canDelete(task: Task): boolean                                        // only ACTIVE tasks can be deleted (archived)
+
+// species.ts
+SPECIES = ['monkey', 'cat'] as const;  type Species;  SPECIES_LABEL: Record<Species, string>
+isSpecies(value: unknown): value is Species                           // guards the saved choice
 
 // rewards.ts
 rewardFor(difficulty: Difficulty, streakDays: number): Reward
@@ -247,11 +267,16 @@ streakFrom(activeDaysDesc: ISODate[], today: ISODate): number
 
 // mood.ts
 moodFor(input: {
-  overdueCount: number;
+  overdueCount: number;                         // active tasks that ended before today
   completedToday: number;
-  activeDueToday: number;
+  activeDueToday: number;                       // active tasks whose dates include today (today's list)
   localHour: number;
+  minutesSinceLastCompletion: number | null;    // null = nothing ever completed; negative counts as just now
 }): Mood
+
+// oneShots.ts
+oneShotsFor(prevLevel: number, nextLevel: number): { kind: OneShot; toStage?: Stage }[]
+// always [celebrate]; + levelUp if the level rose; + evolve (toStage) if the stage rose. Fixed order.
 
 // shop.ts
 canPurchase(item: Item, coins: number, level: number, owned: boolean):
@@ -268,6 +293,7 @@ canPurchase(item: Item, coins: number, level: number, owned: boolean):
 | Evolution stages | Stage 1 at level 1, stage 2 at level 5, stage 3 at level 10, stage 4 at level 25 |
 | Streak | Consecutive local days with at least one `task_done`, counted back from today or yesterday, counting only `task_done` rows added after the last `streak_reset` (ledger order). The streak shown in the UI includes today; the XP bonus uses the streak before today, so every task completed on the same day gets the same bonus. |
 | Sleepy hour | 22 |
+| Happy window | 60 minutes after the last completed task (`HAPPY_AFTER_COMPLETION_MINUTES`) |
 
 ### Mood priority
 
@@ -275,16 +301,22 @@ First match wins:
 
 1. `sad` — `overdueCount > 0` and `completedToday === 0`
 2. `sleepy` — `completedToday === 0` and `localHour >= 22`
-3. `happy` — `completedToday > 0` and `activeDueToday === 0`
+3. `happy` — within 60 minutes of the last completed task, OR `completedToday > 0` and `activeDueToday === 0` (today's whole list is done: happy for the rest of the day)
 4. `idle` — otherwise
+
+`activeDueToday` counts active tasks whose dates include today, so a 16-18 Nov task is still on the list on the 17th. The mood is derived from the tasks held in the store plus the clock (`usePetMood`), and refreshes every 30 seconds so the happy hour ends on its own.
 
 ### Overdue sweep
 
-Runs on app start and whenever the local date changes while the app is open.
+Runs on app start (`startup()`: load tasks, sweep, load progress; memoized so StrictMode cannot run it twice) and, from Phase 7, whenever the local date changes while the app is open. Until then, leaving the app open past midnight does not sweep until the next start.
 
-1. Find tasks where `status = 'active' AND end_date < today AND overdue_flagged = 0`.
-2. If any exist: insert one `streak_reset` event for `today`, set `overdue_flagged = 1` on those tasks.
+1. Find tasks where `status = 'active' AND end_date < today AND overdue_flagged = 0` (derived from the tasks already in the store).
+2. If any exist: insert one `streak_reset` event for `today`, then set `overdue_flagged = 1` on those tasks. In this order so a retry is safe: a duplicate reset leaves the streak unchanged because the streak is cut at the last reset.
 3. Reload totals, streak and mood.
+
+No task is ever created already overdue: **a new task must start today or later** (`canStartOn`, enforced in the store and shown in `QuickAdd`). The past is read-only for adding; past days in the calendar still show their tasks and let you complete the overdue ones. Any active task can be completed, including future ones.
+
+Note on the mood: `sad` needs an overdue task AND nothing completed today. Completing something today (or within the last hour) makes the pet happy even while an older task is still overdue.
 
 Each task resets the streak once. A task that stays overdue for a week does not reset it seven times, but it keeps `overdueCount > 0`, so the monkey turns `sad` again each morning until something is completed that day.
 
@@ -294,23 +326,33 @@ Each task resets the streak once. A task that stays overdue for a week does not 
 // repositories/taskRepo.ts
 export interface TaskRepo {
   listInRange(from: ISODate, to: ISODate): Promise<Task[]>;
-  listOverdueUnflagged(today: ISODate): Promise<Task[]>;
-  countOverdue(today: ISODate): Promise<number>;
+  // listOverdueUnflagged and countOverdue are not implemented: the overdue sweep and the mood derive
+  // them from the tasks already in the store (domain/tasks.ts: newlyOverdue, countOverdue).
   create(input: NewTask): Promise<Task>;
   update(id: number, patch: Partial<NewTask>): Promise<void>;
   /** Marks done AND writes the task_done ledger row. Must be atomic. */
   complete(id: number, reward: Reward, today: ISODate): Promise<void>;
   /** Back to active AND deletes that task's task_done row. Must be atomic. */
   reopen(id: number): Promise<void>;
+  /** Soft delete. Guarded (AND status = 'active'): idempotent and never touches a done task or the ledger. */
   archive(id: number): Promise<void>;
-  flagOverdue(ids: number[], today: ISODate): Promise<void>;   // also inserts streak_reset
+  /** Inserts one streak_reset for today, THEN flags the tasks. Retry-safe (see repository rules). */
+  flagOverdue(ids: number[], today: ISODate): Promise<void>;
 }
 
 // repositories/rewardRepo.ts
 export interface RewardRepo {
   totals(): Promise<Totals>;
   activeDaysSinceLastReset(): Promise<ISODate[]>;   // DESC
-  completedCount(day: ISODate): Promise<number>;
+  completedCount(day: ISODate): Promise<number>;   // available; the mood derives completedToday from the store instead
+  /** Epoch ms of the newest task_done event, or null. Drives the pet's happy hour. */
+  lastCompletionAt(): Promise<number | null>;
+}
+
+// repositories/settingsRepo.ts
+export interface SettingsRepo {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;   // upsert
 }
 
 // repositories/shopRepo.ts
@@ -338,11 +380,12 @@ Repository rules:
 
 ```ts
 export interface CharacterProps {
-  stage: Stage;                       // 1..4, from stageForLevel(level)
+  species: Species;                   // which pet's art to draw; see components/character/species
+  stage: Stage;                       // 1..4, the stage ON SCREEN (store.displayStage: it lags the level while an evolve is queued)
   mood: Mood;                         // 'idle' | 'happy' | 'sad' | 'sleepy', from moodFor(...)
   equipped: Equipped;                 // slot -> assetKey | null
-  /** Head of the store's animation queue; null when nothing is pending. */
-  oneShot: { id: number; kind: OneShot } | null;
+  /** Head of the store's animation queue; null when nothing is pending. toStage is only for 'evolve'. */
+  oneShot: { id: number; kind: OneShot; toStage?: Stage } | null;
   /** Called when the one-shot finishes so the store can dequeue it. */
   onOneShotDone: (id: number) => void;
   /** Rendered size in CSS px. Must be an integer multiple of the 32 px grid. */
@@ -351,6 +394,14 @@ export interface CharacterProps {
 ```
 
 The component is purely presentational. It holds no game state and imports nothing from `store/` or `repositories/`.
+
+### Pets
+
+The player picks **one** pet (monkey or cat). XP, coins, streak and level belong to the player, not the pet, so switching never loses progress: the species is only the skin. Several pets at once, each with its own progress, would need a `pet_id` on `reward_events`, per-pet inventory and per-pet mood and animation state; that is deliberately out of scope.
+
+- First run: `species` is null, so `CharacterPanel` shows `PetPicker`. After that a "Change pet" button reopens it. The picker stays hidden until the saved choice has loaded (`settingsLoaded`), so returning players never see it flash.
+- The Orange Tabby cat: a chibi sitting cat. It only grows bigger and gains details by stage (stage 1 stripes and a collar with a bell, stage 2 blush, stage 3 eyelashes and a tail bow, stage 4 sparkly eyes, a cream tail tip and tufted ears). It never gets bulkier, and there is no ruff.
+- Deleting a task archives it (`archived`): only active tasks, inline "Delete? Yes / No" confirmation, ledger untouched.
 
 ### State machine
 

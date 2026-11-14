@@ -1,7 +1,11 @@
-import { useEffect } from "react";
+import { useState } from "react";
 import { Panel } from "../layout/Panel";
-import { usePlayerProgress } from "../../store/selectors";
+import { SPECIES_LABEL } from "../../domain/species";
+import { usePetMood, usePetOneShot, usePlayerProgress } from "../../store/selectors";
 import { useAppStore } from "../../store/useAppStore";
+import type { Equipped } from "../../domain/types";
+import { Character } from "./Character";
+import { PetPicker } from "./PetPicker";
 
 interface StatTileProps {
   label: string;
@@ -18,28 +22,62 @@ function StatTile({ label, value, valueClass }: StatTileProps) {
   );
 }
 
+// No accessories until the shop exists (Phase 6). One constant, so the prop never changes identity.
+const NO_ACCESSORIES: Equipped = { hat: null, glasses: null, held: null, background: null };
+
 export function CharacterPanel() {
   // Level, XP, coins and streak are derived from the ledger totals held in the store.
   const { level, intoLevel, needed, coins, streak } = usePlayerProgress();
-  const loadProgress = useAppStore((s) => s.loadProgress);
+  const mood = usePetMood();
+  const oneShot = usePetOneShot();
+  const stage = useAppStore((s) => s.displayStage);
+  const dequeueOneShot = useAppStore((s) => s.dequeueOneShot);
+  const species = useAppStore((s) => s.species);
+  const settingsLoaded = useAppStore((s) => s.settingsLoaded);
+  const chooseSpecies = useAppStore((s) => s.chooseSpecies);
 
-  // Load once on startup. Action functions keep the same identity, so this does not re-run.
-  useEffect(() => {
-    void loadProgress();
-  }, [loadProgress]);
+  // Only this panel cares whether the picker is open after the first run, so it stays local state.
+  const [choosing, setChoosing] = useState(false);
+  // Wait for the saved choice before deciding, so returning players never see the picker flash.
+  const showPicker = settingsLoaded && (species === null || choosing);
 
   const percent = Math.round((intoLevel / needed) * 100); // needed is always at least 100
 
   return (
-    <Panel id="character-heading" title="Monkey">
-      {/* Placeholder stage: the pixel-art monkey replaces this box in Phase 5. */}
-      <div
-        role="img"
-        aria-label="Monkey character placeholder"
-        className="mx-auto flex h-40 w-40 items-center justify-center rounded-panel border-2 border-dashed border-border bg-bg font-pixel text-xs text-text-muted"
-      >
-        monkey here
-      </div>
+    <Panel id="character-heading" title={species === null ? "Pet" : SPECIES_LABEL[species]}>
+      {!settingsLoaded ? (
+        // Same size as the pet (192 px), so nothing jumps when the saved choice arrives.
+        <div className="mx-auto h-48 w-48" aria-hidden="true" />
+      ) : showPicker ? (
+        <PetPicker
+          current={species}
+          onChoose={(chosen) => {
+            void chooseSpecies(chosen);
+            setChoosing(false);
+          }}
+          onCancel={species === null ? undefined : () => setChoosing(false)}
+        />
+      ) : (
+        species !== null && (
+          <div className="mx-auto w-fit">
+            <Character
+              species={species}
+              stage={stage}
+              mood={mood}
+              equipped={NO_ACCESSORIES}
+              oneShot={oneShot}
+              onOneShotDone={dequeueOneShot}
+            />
+            <button
+              type="button"
+              onClick={() => setChoosing(true)}
+              className="mx-auto mt-2 block rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:text-accent"
+            >
+              Change pet
+            </button>
+          </div>
+        )
+      )}
 
       <div className="mt-5 flex items-center justify-between">
         <span className="rounded-md bg-accent px-2 py-0.5 font-pixel text-sm font-bold text-on-accent">

@@ -1,9 +1,19 @@
+import { useEffect } from "react";
 import { TitleBar } from "./components/layout/TitleBar";
 import { CalendarPanel } from "./components/calendar/CalendarPanel";
 import { TaskPanel } from "./components/tasks/TaskPanel";
 import { CharacterPanel } from "./components/character/CharacterPanel";
+import { useAppStore } from "./store/useAppStore";
 
 export function App() {
+  const startup = useAppStore((s) => s.startup);
+
+  // The one place the app loads its data: tasks, the overdue sweep, then progress. startup()
+  // runs its steps once even though StrictMode calls this effect twice in development.
+  useEffect(() => {
+    void startup();
+  }, [startup]);
+
   return (
     <div className="flex h-full flex-col">
       <TitleBar title="Tasks Organizer" />

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Panel } from "../layout/Panel";
 import { TaskRow } from "./TaskRow";
 import { QuickAdd } from "./QuickAdd";
@@ -11,9 +10,10 @@ interface TaskGroupProps {
   heading: string;
   tasks: Task[];
   onComplete: (id: number) => void;
+  onDelete: (id: number) => void;
 }
 
-function TaskGroup({ heading, tasks, onComplete }: TaskGroupProps) {
+function TaskGroup({ heading, tasks, onComplete, onDelete }: TaskGroupProps) {
   if (tasks.length === 0) return null;
   return (
     <div className="mb-5 last:mb-0">
@@ -23,7 +23,7 @@ function TaskGroup({ heading, tasks, onComplete }: TaskGroupProps) {
       <ul className="flex flex-col gap-2">
         {tasks.map((task) => (
           // The database id is stable, so it is the right key (never the array index).
-          <TaskRow key={task.id} task={task} onComplete={onComplete} />
+          <TaskRow key={task.id} task={task} onComplete={onComplete} onDelete={onDelete} />
         ))}
       </ul>
     </div>
@@ -37,14 +37,9 @@ export function TaskPanel() {
   const tasks = useVisibleTasks();
   const selection = useAppStore((s) => s.selection);
   const error = useAppStore((s) => s.error);
-  const loadTasks = useAppStore((s) => s.loadTasks);
   const completeTask = useAppStore((s) => s.completeTask);
+  const deleteTask = useAppStore((s) => s.deleteTask);
   const clearSelection = useAppStore((s) => s.clearSelection);
-
-  // Load once on startup. Action functions keep the same identity, so this does not re-run.
-  useEffect(() => {
-    void loadTasks();
-  }, [loadTasks]);
 
   // Derived during render: no extra state to keep in sync.
   const active = tasks.filter((task) => task.status === "active");
@@ -89,8 +84,8 @@ export function TaskPanel() {
         </p>
       )}
 
-      <TaskGroup heading="Active" tasks={active} onComplete={completeTask} />
-      <TaskGroup heading="Done" tasks={done} onComplete={completeTask} />
+      <TaskGroup heading="Active" tasks={active} onComplete={completeTask} onDelete={deleteTask} />
+      <TaskGroup heading="Done" tasks={done} onComplete={completeTask} onDelete={deleteTask} />
     </Panel>
   );
 }

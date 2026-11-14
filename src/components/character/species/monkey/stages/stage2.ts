@@ -1,0 +1,38 @@
+import type { Grid } from "../../types";
+
+// Capuchin, stage 2: taller, rounder body.
+// 32 rows of 32 palette keys ('.' is transparent). The face is a separate layer (faces/).
+export const STAGE_2_BODY: Grid = [
+  "................................",
+  "................................",
+  "................................",
+  "................................",
+  ".............oooooo.............",
+  "...........ooddddddoo...........",
+  ".........ooddddddddddoo.........",
+  "......ooooddddddddddddoooo......",
+  "....ooddoddddddddddddddoddoo....",
+  "....odsoddddddddddddddddosdo....",
+  "....odsodddsddddddddsdddosdo....",
+  "....odsoddssssssssssssddosdo....",
+  "....odsodssssssssssssssdosdo....",
+  "....oododssssssssssssssdodoo....",
+  ".....ooodsssssttttsssssdooo.....",
+  ".......odssssttttttssssdo.......",
+  "........odssttttttttssdo........",
+  ".....ooooosssttttttsssoo........",
+  "....oocccoossssssssssoo.........",
+  "....odccoffoossssssooffo........",
+  "....oddoofffoooooooofffo........",
+  "...odddoofffoccccccofffo........",
+  "...odddoofffoccccccofffo........",
+  "...odddoofffoccccccofffo........",
+  "....odddocccofccccfoccc.........",
+  "....oddddcccffffffffccc.........",
+  ".....odddoodooffffoodoo.........",
+  ".....oododddddoooodddddo........",
+  ".......ooddddddooddddddo........",
+  ".........ooddoo..ooddoo.........",
+  "...........ooo....ooo...........",
+  "................................",
+];
