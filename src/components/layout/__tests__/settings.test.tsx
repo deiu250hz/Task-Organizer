@@ -1,11 +1,22 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { renderWith } from "../../__tests__/renderWithStore";
+import { BackupSection, type BackupSectionProps } from "../BackupSection";
 import { SettingsMenu } from "../SettingsMenu";
 import { SettingsPanel, type SettingsPanelProps } from "../SettingsPanel";
 import { TitleBar } from "../TitleBar";
 
 const noop = () => undefined;
+
+const idleBackup: BackupSectionProps = {
+  busy: false,
+  message: null,
+  pending: null,
+  onExport: noop,
+  onImport: noop,
+  onConfirmImport: noop,
+  onCancelImport: noop,
+};
 
 function panel(overrides: Partial<SettingsPanelProps> = {}): string {
   return renderToStaticMarkup(
@@ -15,10 +26,20 @@ function panel(overrides: Partial<SettingsPanelProps> = {}): string {
       onRemindersChange={noop}
       onTest={noop}
       testResult="none"
+      backup={idleBackup}
       {...overrides}
     />,
   );
 }
+
+function backup(overrides: Partial<BackupSectionProps> = {}): string {
+  return renderToStaticMarkup(<BackupSection {...idleBackup} {...overrides} />);
+}
+
+const pending = {
+  fileName: "my backup.json",
+  summary: { tasks: 12, events: 40, items: 1, exportedAt: "2026-11-14T12:00:00.000Z" },
+};
 
 describe("SettingsMenu", () => {
   it("starts closed: only the gear button, named and collapsed", () => {
@@ -37,7 +58,72 @@ describe("SettingsMenu", () => {
   });
 });
 
+describe("BackupSection", () => {
+  it("offers Export and Import, enabled, and no confirmation, when idle", () => {
+    const html = backup();
+    expect(html).toContain("Export backup");
+    expect(html).toContain("Import backup");
+    expect(html).not.toContain('disabled=""');
+    expect(html).not.toContain("Replace your data?");
+    expect(html).toContain('aria-labelledby="backup-heading"');
+  });
+
+  it("disables the buttons while an action runs", () => {
+    const html = backup({ busy: true });
+    expect(html.split('disabled=""').length - 1).toBe(2);
+  });
+
+  it("shows the last result in a status region, red for an error", () => {
+    const ok = backup({ message: { tone: "ok", text: "Backup saved to C:\\b.json" } });
+    expect(ok).toContain('role="status"');
+    expect(ok).toContain("Backup saved to C:\\b.json");
+    expect(ok).not.toContain("text-danger");
+    const bad = backup({ message: { tone: "error", text: "my backup.json: This file is not a valid backup (it is not JSON)." } });
+    expect(bad).toContain("not a valid backup");
+    expect(bad).toContain("text-danger");
+  });
+
+  it("asks for confirmation, with the file name, its date and its counts", () => {
+    const html = backup({ pending });
+    expect(html).toContain("Replace your data?");
+    expect(html).toContain("my backup.json");
+    expect(html).toContain("14 Nov 2026");
+    expect(html).toContain("12 tasks");
+    expect(html).toContain("40 reward entries");
+    expect(html).toContain("A safety copy of your current data is saved first.");
+    expect(html).toContain("Replace everything");
+    expect(html).toContain("Cancel");
+  });
+
+  it("hides Export and Import while a confirmation is showing", () => {
+    const html = backup({ pending });
+    expect(html).not.toContain("Export backup");
+    expect(html).not.toContain("Import backup");
+  });
+
+  it("uses the singular for one task and one reward entry", () => {
+    const html = backup({ pending: { ...pending, summary: { ...pending.summary, tasks: 1, events: 1 } } });
+    expect(html).toContain("1 task and");
+    expect(html).toContain("1 reward entry.");
+  });
+
+  it("shows a failed import inside the confirmation, so the player can retry", () => {
+    const html = backup({ pending, message: { tone: "error", text: "disk full Importing the same file again is safe." } });
+    expect(html).toContain("Importing the same file again is safe.");
+    expect(html).toContain("Replace everything");
+  });
+
+  it("does not show the 'ready' message inside the confirmation", () => {
+    const html = backup({ pending, message: { tone: "ok", text: "Ready to import my backup.json." } });
+    expect(html).not.toContain("Ready to import");
+  });
+});
+
 describe("SettingsPanel", () => {
+  it("includes the backup section", () => {
+    expect(panel()).toContain("Export backup");
+  });
+
   it("shows a labelled checkbox that follows the setting", () => {
     const on = panel({ remindersEnabled: true });
     expect(on).toContain("<label");

@@ -1,16 +1,25 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, type BackupResult } from "../../store/useAppStore";
+import type { BackupMessage } from "./BackupSection";
 import { SettingsPanel, type TestResult } from "./SettingsPanel";
 
-// A gear-style button in the title bar that opens a small popover. Whether it is open and the
-// result of the last test are only this component's business, so they stay local state.
+// A gear-style button in the title bar that opens a small popover. Whether it is open, the
+// result of the last test and of the last backup action are only this component's business, so
+// they stay local state. The file waiting for confirmation lives in the store (it is the parsed backup).
 export function SettingsMenu() {
   const remindersEnabled = useAppStore((s) => s.remindersEnabled);
   const setRemindersEnabled = useAppStore((s) => s.setRemindersEnabled);
   const sendTestReminder = useAppStore((s) => s.sendTestReminder);
+  const pendingImport = useAppStore((s) => s.pendingImport);
+  const exportBackup = useAppStore((s) => s.exportBackup);
+  const prepareImport = useAppStore((s) => s.prepareImport);
+  const confirmImport = useAppStore((s) => s.confirmImport);
+  const cancelImport = useAppStore((s) => s.cancelImport);
 
   const [open, setOpen] = useState(false);
   const [testResult, setTestResult] = useState<TestResult>("none");
+  const [busy, setBusy] = useState(false);
+  const [backupMessage, setBackupMessage] = useState<BackupMessage | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
@@ -19,12 +28,18 @@ export function SettingsMenu() {
   // The listeners are removed when it closes, when the component unmounts, and between StrictMode's runs.
   useEffect(() => {
     if (!open) return;
+    // Closing the popover also drops a file that was waiting for confirmation: nothing is replaced
+    // by accident because the player wandered off.
     const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && rootRef.current?.contains(event.target) !== true) setOpen(false);
+      if (event.target instanceof Node && rootRef.current?.contains(event.target) !== true) {
+        setOpen(false);
+        cancelImport();
+      }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
+        cancelImport();
         buttonRef.current?.focus();
       }
     };
@@ -34,15 +49,28 @@ export function SettingsMenu() {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, cancelImport]);
 
   const toggle = () => {
+    if (open) cancelImport();
     setOpen((wasOpen) => !wasOpen);
     setTestResult("none"); // a stale "sent" message should not greet the next opening
+    setBackupMessage(null);
   };
 
   const handleTest = async () => {
     setTestResult((await sendTestReminder()) ? "sent" : "failed");
+  };
+
+  // Runs one backup action: the buttons wait while it runs, then the result is shown. A cancelled
+  // dialog is not an error and shows nothing.
+  const runBackup = async (action: () => Promise<BackupResult>) => {
+    setBusy(true);
+    setBackupMessage(null);
+    const result = await action();
+    setBusy(false);
+    if (result.kind === "done") setBackupMessage({ tone: "ok", text: result.message });
+    else if (result.kind === "error") setBackupMessage({ tone: "error", text: result.message });
   };
 
   return (
@@ -71,6 +99,18 @@ export function SettingsMenu() {
           onRemindersChange={(enabled) => void setRemindersEnabled(enabled)}
           onTest={() => void handleTest()}
           testResult={testResult}
+          backup={{
+            busy,
+            message: backupMessage,
+            pending: pendingImport === null ? null : { fileName: pendingImport.fileName, summary: pendingImport.summary },
+            onExport: () => void runBackup(exportBackup),
+            onImport: () => void runBackup(prepareImport),
+            onConfirmImport: () => void runBackup(confirmImport),
+            onCancelImport: () => {
+              cancelImport();
+              setBackupMessage(null);
+            },
+          }}
         />
       )}
     </div>
