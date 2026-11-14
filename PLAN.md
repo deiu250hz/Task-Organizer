@@ -154,6 +154,17 @@ CREATE INDEX idx_tasks_status  ON tasks(status, end_date);
 CREATE INDEX idx_rewards_day   ON reward_events(day);
 ```
 
+`src-tauri/migrations/002_settings.sql` (preferences, not progress; nothing here is a counter):
+
+```sql
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+```
+
+The chosen pet is saved under the key `species` (`monkey` or `cat`). A missing or unknown value means "not chosen yet" and shows the first-run picker.
+
 Notes on the schema:
 
 - No time-of-day field exists on tasks. `created_at` columns are audit timestamps and never drive behaviour, with one deliberate exception: the time of the last `task_done` event (`rewardRepo.lastCompletionAt`) decides how long the pet stays happy after a completed task (Phase 5). It is compared in epoch milliseconds, so time zones and DST do not matter.
@@ -236,6 +247,12 @@ formatDayRange(from: ISODate, to: ISODate): string                    // "16 Nov
 // tasks.ts
 tasksInRange(tasks: Task[], from: ISODate, to: ISODate): Task[]       // tasks overlapping the range
 anyTaskOn(tasks: Task[], day: ISODate): boolean                       // drives the calendar dots
+canStartOn(startDate: ISODate, today: ISODate): boolean               // a new task must start today or later
+canDelete(task: Task): boolean                                        // only ACTIVE tasks can be deleted (archived)
+
+// species.ts
+SPECIES = ['monkey', 'cat'] as const;  type Species;  SPECIES_LABEL: Record<Species, string>
+isSpecies(value: unknown): value is Species                           // guards the saved choice
 
 // rewards.ts
 rewardFor(difficulty: Difficulty, streakDays: number): Reward
@@ -317,6 +334,7 @@ export interface TaskRepo {
   complete(id: number, reward: Reward, today: ISODate): Promise<void>;
   /** Back to active AND deletes that task's task_done row. Must be atomic. */
   reopen(id: number): Promise<void>;
+  /** Soft delete. Guarded (AND status = 'active'): idempotent and never touches a done task or the ledger. */
   archive(id: number): Promise<void>;
   /** Inserts one streak_reset for today, THEN flags the tasks. Retry-safe (see repository rules). */
   flagOverdue(ids: number[], today: ISODate): Promise<void>;
@@ -329,6 +347,12 @@ export interface RewardRepo {
   completedCount(day: ISODate): Promise<number>;   // available; the mood derives completedToday from the store instead
   /** Epoch ms of the newest task_done event, or null. Drives the pet's happy hour. */
   lastCompletionAt(): Promise<number | null>;
+}
+
+// repositories/settingsRepo.ts
+export interface SettingsRepo {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;   // upsert
 }
 
 // repositories/shopRepo.ts
@@ -370,6 +394,14 @@ export interface CharacterProps {
 ```
 
 The component is purely presentational. It holds no game state and imports nothing from `store/` or `repositories/`.
+
+### Pets
+
+The player picks **one** pet (monkey or cat). XP, coins, streak and level belong to the player, not the pet, so switching never loses progress: the species is only the skin. Several pets at once, each with its own progress, would need a `pet_id` on `reward_events`, per-pet inventory and per-pet mood and animation state; that is deliberately out of scope.
+
+- First run: `species` is null, so `CharacterPanel` shows `PetPicker`. After that a "Change pet" button reopens it. The picker stays hidden until the saved choice has loaded (`settingsLoaded`), so returning players never see it flash.
+- The Orange Tabby cat: a chibi sitting cat. It only grows bigger and gains details by stage (stage 1 stripes and a collar with a bell, stage 2 blush, stage 3 eyelashes and a tail bow, stage 4 sparkly eyes, a cream tail tip and tufted ears). It never gets bulkier, and there is no ruff.
+- Deleting a task archives it (`archived`): only active tasks, inline "Delete? Yes / No" confirmation, ledger untouched.
 
 ### State machine
 
