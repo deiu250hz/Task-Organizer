@@ -4,6 +4,8 @@ A gamified desktop task manager for Windows. Plan tasks on a calendar, complete 
 
 > **Status:** version 1.0.0. Phases 0 to 8 of 9 are done: the app is fully playable, lives in the system tray, can back up and restore your data, and builds into a Windows installer. Only the stretch goals (Phase 9) are left. See the [roadmap](#roadmap).
 
+> **Platforms:** Windows 10 and 11. Tauri is cross-platform, so a macOS version is possible, but it is not configured or tested yet.
+
 ## Features
 
 - **Calendar panel**: select a single day or a range of days; days with tasks are marked. Tasks can only be added from today onwards, and overdue tasks from earlier days can still be completed.
@@ -23,27 +25,27 @@ Not built yet: start with Windows, remembering the window size and position, a g
 
 ## Tech stack
 
-| Layer         | Technology                                                                         |
-| ------------- | ---------------------------------------------------------------------------------- |
+| Layer         | Technology                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------- |
 | Desktop shell | [Tauri 2](https://v2.tauri.app/) (Rust, WebView2), tray, notification, single-instance, dialog, fs plugins |
-| UI            | React, TypeScript, Vite                                                            |
-| Styling       | Tailwind CSS 4                                                                     |
-| State         | Zustand                                                                            |
-| Calendar      | react-day-picker, date-fns                                                         |
-| Storage       | SQLite via `tauri-plugin-sql`                                                      |
-| Character art | SVG pixel art generated in code (`shape-rendering="crispEdges"`)                   |
-| Tests         | Vitest                                                                             |
+| UI            | React, TypeScript, Vite                                                                                     |
+| Styling       | Tailwind CSS 4                                                                                              |
+| State         | Zustand                                                                                                     |
+| Calendar      | react-day-picker, date-fns                                                                                  |
+| Storage       | SQLite via `tauri-plugin-sql`                                                                               |
+| Character art | SVG pixel art generated in code (`shape-rendering="crispEdges"`)                                            |
+| Tests         | Vitest (game rules, store, backup validation, components)                                                   |
 
 ## Architecture
 
 ```
 components/  ->  store/  ->  domain/        (pure TypeScript game rules)
                         ->  repositories/  ->  SQLite
-                        ->  platform/      ->  system notifications
+                        ->  platform/      ->  notifications, file dialogs and files
 ```
 
 - The UI never talks to the database or the system; it reads state and calls actions on the Zustand store.
-- `domain/` holds every XP, level, streak, mood, shop and reminder rule as pure functions, with no React, Tauri or I/O imports and no clock reads, so it is fully unit-tested.
+- `domain/` holds every XP, level, streak, mood, shop, reminder and backup-validation rule as pure functions, with no React, Tauri or I/O imports and no clock reads, so it is fully unit-tested.
 - XP and coins are never stored as counters. They are sums over an append-only `reward_events` ledger; a purchase is a negative-coins event.
 - Writes that touch two things (completing a task, buying an item) are ordered, guarded statements that are safe to retry, because the SQL plugin cannot run a transaction across calls.
 
