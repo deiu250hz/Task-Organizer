@@ -14,7 +14,7 @@ Last updated: 2026-11-13
 | Dates | Tasks have dates only, stored as local `YYYY-MM-DD` strings. No time of day. |
 | Overdue | No XP or coin penalty. An overdue task resets the streak once and makes the monkey `sad` until a task is completed. |
 | Totals | XP and coins are never stored as counters. They are `SUM()` over an append-only ledger. |
-| Division of labor | Agent: all UI, Tailwind, SVG art. Andrei: Tauri/Rust config, SQL, repositories, store, `domain/`. See section 7. |
+| Division of labor | Agent: styling (Tailwind, theme tokens) and all pixel art. Andrei: all logic, including React components, plus Tauri/Rust config, SQL, repositories, store, `domain/`. See section 7. |
 
 ## 2. Architecture
 
@@ -373,13 +373,17 @@ Two kinds of state: a looping base state chosen by `mood`, and one-shot animatio
 
 | Area | Owner | Agent behaviour |
 | --- | --- | --- |
-| `src/components/**`, `index.css`, Tailwind, SVG art | Agent | Writes complete code, then explains the data flow |
+| `src/components/**` logic and structure, `App.tsx`, `main.tsx` | Andrei | Mentor mode: props interface, store needs, concepts, edge cases, review |
+| Styling: Tailwind classes, `index.css`, `@theme` tokens | Agent | Writes complete styling; changes only `className` and CSS in Andrei's components |
+| `src/components/character/**` (sprites, palette, anchors, `PixelSprite`, faces, accessories, `Character`, `useCharacterMachine`) and its keyframes | Agent | Writes complete code, then explains the data flow |
 | `src/domain/**` | Andrei | Mentor mode: signatures, concepts, edge cases, review |
 | `src/repositories/**`, SQL migrations | Andrei | Mentor mode |
 | `src/store/**` | Andrei | Mentor mode |
 | `src-tauri/**` (Rust, config, capabilities) | Andrei | Mentor mode |
 
-When UI work needs a store action or domain function that does not exist yet, the agent builds the component against props or mock data and lists the exact signatures it needs. It does not implement them.
+When pixel-art code needs a store action or domain function that does not exist yet, the agent builds against props or mock data and lists the exact signatures it needs. It does not implement them.
+
+The Phase 0 and Phase 1 components were written by the agent before this split and serve as reference code. From Phase 2 on, Andrei writes the React components and the agent styles them. In the roadmap below, the "Agent builds" column now means: Andrei writes the component logic, the agent styles it; pixel-art items remain fully agent-built.
 
 ## 8. Roadmap
 

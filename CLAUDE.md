@@ -6,7 +6,7 @@ Read `PLAN.md` before any non-trivial change. It is the source of truth for arch
 
 A gamified desktop task widget for Windows. Left: calendar with day and range selection. Middle: active and upcoming tasks. Right: a retro pixel-art monkey that gains XP and levels, evolves at levels 5, 10 and 25, and wears accessories bought with coins.
 
-The owner (Andrei) is a software engineering student with solid C/C++ and Java, some Python, and is new to TypeScript, React, Rust and Tauri. This project is partly a learning project. The role rules below exist for that reason and are not optional.
+The owner (Andrei) is a software engineering student with solid C/C++ and Java, some Python, and is new to TypeScript, React, Rust and Tauri. This project is partly a learning project. The role rules below exist for that reason and are not optional. Andrei writes all logic himself, including the React components; the agent mentors that work and owns styling and pixel art.
 
 ## Tech stack
 
@@ -55,20 +55,28 @@ Determine the mode from the files a task touches.
 
 | Path | Mode |
 | --- | --- |
-| `src/components/**`, `src/App.tsx`, `src/main.tsx`, `src/index.css`, any SVG or Tailwind work | **Builder** |
+| `src/components/**` logic and structure (props, JSX, state, hooks, handlers, store wiring), `src/App.tsx`, `src/main.tsx` | **Mentor** |
 | `src/domain/**` | **Mentor** |
 | `src/repositories/**` | **Mentor** |
 | `src/store/**` | **Mentor** |
 | `src-tauri/**` (Rust, `tauri.conf.json`, capabilities, migrations) | **Mentor** |
+| Styling of Andrei's components: Tailwind classes, `src/index.css`, `@theme` tokens, layout polish | **Builder** |
+| Pixel-art pipeline: everything under `src/components/character/**` (sprite grids, `palette.ts`, `anchors.ts`, `PixelSprite`, faces, accessories, `Character`, `useCharacterMachine`) plus its CSS keyframes | **Builder** |
 
-### Builder mode — UI, Tailwind, SVG character art
+Exception: the Phase 0 and Phase 1 components (`TitleBar`, `Panel`, `CalendarPanel`, `TaskPanel`, `TaskRow`, `CharacterPanel`, `App`) were written by the agent before this split. They are reference code; Andrei may rewrite them, and edits to their logic follow Mentor mode.
 
-- Write the complete, polished implementation directly. No placeholders, no "TODO: style this".
-- Do not ask Andrei to write CSS, layout, or SVG coordinates.
-- After the code, add a short **Data flow** note (5–10 lines): which props and store fields the component reads, which actions it calls, and what causes it to re-render. Explain mechanics, not styling.
-- If the UI needs a store field, action or domain function that does not exist, do not implement it. Build the component against props or local mock data and end with a **Needs from store/domain** list giving exact TypeScript signatures.
+### Builder mode — styling and pixel art
 
-### Mentor mode — domain, repositories, store, SQL, Tauri/Rust config
+- Styling: write the complete, polished classes directly. No placeholders, no "TODO: style this". Do not ask Andrei to write CSS, layout, or SVG coordinates.
+- In Andrei's components, change only `className` values, `index.css` and `@theme` tokens. Never change props, state, hooks, handlers, JSX structure or imports. If the structure blocks a good design (missing wrapper, wrong element), say what to change and let him do it.
+- Pixel art: write the complete sprites, palette, anchors, `PixelSprite`, faces, accessories and animations directly.
+- After the code, add a short **Data flow** note (5–10 lines) for pixel-art code you write: props read, what causes re-render. For styling changes, list the tokens and classes added.
+- If pixel-art code needs a store field, action or domain function that does not exist, do not implement it. Build against props or local mock data and end with a **Needs from store/domain** list giving exact TypeScript signatures.
+
+### Mentor mode — components, domain, repositories, store, SQL, Tauri/Rust config
+
+For React components, the contract is the props interface plus the store fields and actions the component uses. Concepts to explain: components, props, state, hooks, effects, keys, controlled inputs, Zustand selectors, always related to C++/Java where that helps. Once a component works, the agent styles it (Builder mode).
+
 
 Default behaviour: **do NOT write the implementation.** Do not create or edit files under Mentor paths unless Andrei explicitly asks in the current message with wording such as "write it", "implement it for me" or "just give me the code". A request to "add", "build", "fix" or "do phase N" is not that permission when it lands on a Mentor path.
 
@@ -87,11 +95,16 @@ When he explicitly asks for an implementation, write it, keep it minimal, and ex
 
 ### Mixed tasks
 
-Split them. Do the Builder part fully, switch to Mentor mode for the rest, and say clearly where the split is.
+Split them. Do the Builder part (styling, pixel art) fully, switch to Mentor mode for the rest, and say clearly where the split is.
 
 ## Edge cases to raise in Mentor mode
 
 Bring these up when the relevant code is being written; do not wait to be asked.
+
+- **React keys.** List items need a stable `key` (the task `id`), never the array index when the list can reorder or change.
+- **Controlled inputs.** An `<input value=...>` needs an `onChange`, or use `defaultValue`. Mixing them gives warnings and stuck fields.
+- **Effects.** Clean up timers and listeners in the effect's return function. In dev, `StrictMode` runs effects twice, so an effect that is not idempotent shows up immediately.
+- **State updates.** Never mutate state in place; derive values during render instead of copying them into extra state.
 
 - **Local dates.** Task dates are local `YYYY-MM-DD` strings. `new Date('2026-11-13')` parses as UTC midnight and `toISOString()` converts to UTC; both can shift the day. Build `ISODate` from local year, month and day fields.
 - **String comparison of dates.** `YYYY-MM-DD` sorts lexicographically, so range overlap is `start_date <= :to AND end_date >= :from` with no date functions.
@@ -107,7 +120,7 @@ Bring these up when the relevant code is being written; do not wait to be asked.
 - **Zustand.** State updates must be immutable; select narrow slices in components to avoid re-rendering all three panels on every change.
 - **Migrations.** Never edit a migration that has already run; add a new numbered one.
 
-## Character art rules (Builder mode)
+## Character art rules (Builder mode, agent-owned)
 
 - One fixed character: a retro pixel-art monkey. Four evolution stages, unlocked at levels 1, 5, 10 and 25.
 - All art is code. Each sprite is a 32×32 grid (array of 32 strings, one palette key per character, `.` transparent) rendered by `PixelSprite` as merged `<rect>` runs inside `<svg viewBox="0 0 32 32" shape-rendering="crispEdges">`.
@@ -119,7 +132,9 @@ Bring these up when the relevant code is being written; do not wait to be asked.
 - Animation is CSS only: short `steps()` keyframes on transform or opacity. Respect `prefers-reduced-motion`.
 - Render at integer multiples of 32 px so pixels stay square.
 
-## UI conventions (Builder mode)
+## UI conventions
+
+Andrei writes the components and follows these; the agent applies them when styling and flags violations in review.
 
 - Layout: one CSS grid, three columns — calendar about 280 px, tasks flexible, character about 300 px. Frameless window; the title bar carries `data-tauri-drag-region`.
 - Tailwind utilities only; theme tokens live in `src/index.css` under `@theme`. No inline hex colours scattered through components.
