@@ -8,12 +8,16 @@ import type {
 } from "../domain/types";
 import { getDb } from "./db";
 
-// Contract (the subset of PLAN.md section 5 needed for Phase 2).
+// Contract (the subset of PLAN.md section 5 implemented so far).
 export interface TaskRepo {
   listInRange(from: ISODate, to: ISODate): Promise<Task[]>;
   create(input: NewTask): Promise<Task>;
   /** Marks the task done and writes its task_done ledger row. Safe to retry; see the comment on complete. */
   complete(id: number, reward: Reward, today: ISODate): Promise<void>;
+  /** The streak resets once for these tasks, then they are flagged. Safe to retry; see the comment on flagOverdue. */
+  flagOverdue(ids: number[], today: ISODate): Promise<void>;
+  /** Flags tasks without resetting the streak (a task created already past its end date is not a missed deadline). */
+  markFlagged(ids: number[]): Promise<void>;
 }
 
 // A row exactly as SQLite returns it: snake_case, 0/1 for booleans, plain strings for dates.
@@ -113,4 +117,34 @@ async function complete(
   );
 }
 
-export const taskRepo: TaskRepo = { listInRange, create, complete };
+// "$1, $2, ..." for n bound values. Only placeholders are built here, never the values.
+function placeholders(count: number): string {
+  return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(", ");
+}
+
+async function markFlagged(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  await db.execute(`UPDATE tasks SET overdue_flagged = 1 WHERE id IN (${placeholders(ids.length)})`, ids);
+}
+
+/*
+ * Same idea as complete: two writes, ordered so a retry is safe.
+ *   1. insert one streak_reset event for today;
+ *   2. flag the tasks so they never reset the streak again.
+ * If step 2 fails the tasks stay unflagged, and the next sweep inserts another reset. A second
+ * reset is harmless, because the streak is cut at the LAST reset, so the result is identical.
+ * Flagging first would be worse: a failure after it would lose the reset for good.
+ */
+async function flagOverdue(ids: number[], today: ISODate): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO reward_events (task_id, xp, coins, reason, day, created_at)
+     VALUES (NULL, 0, 0, 'streak_reset', $1, $2)`,
+    [today, new Date().toISOString()],
+  );
+  await markFlagged(ids);
+}
+
+export const taskRepo: TaskRepo = { listInRange, create, complete, flagOverdue, markFlagged };
