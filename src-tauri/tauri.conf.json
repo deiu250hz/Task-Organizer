@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "task-organizer",
-  "version": "0.1.0",
+  "productName": "Tasks Organizer",
+  "version": "1.0.0",
   "identifier": "com.andre.task-organizer",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Task Organizer",
+        "title": "Tasks Organizer",
         "width": 1100,
         "height": 700,
         "resizable": true,
@@ -20,22 +20,35 @@
         "minHeight": 560,
         "decorations": false,
         "center": true
-      
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost",
+      "devCsp": null
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "A gamified task manager with a pixel-art pet.",
+    "longDescription": "Plan tasks on a calendar, complete them to earn XP and coins, and watch a pixel-art pet level up, evolve and wear the accessories you buy.",
+    "copyright": "Copyright (c) 2026 deiu250hz",
+    "category": "Productivity",
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico"
+      }
+    }
   }
 }
