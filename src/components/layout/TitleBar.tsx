@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { SettingsMenu } from "./SettingsMenu";
 
 export interface TitleBarProps {
   title: string;
@@ -32,6 +33,7 @@ export function TitleBar({ title }: TitleBarProps) {
       </span>
 
       <div className="flex">
+        <SettingsMenu />
         <button
           type="button"
           aria-label="Minimize window"
