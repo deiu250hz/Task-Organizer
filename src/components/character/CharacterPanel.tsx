@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Panel } from "../layout/Panel";
+import { SPECIES_LABEL } from "../../domain/species";
 import { usePetMood, usePetOneShot, usePlayerProgress } from "../../store/selectors";
 import { useAppStore } from "../../store/useAppStore";
 import type { Equipped } from "../../domain/types";
 import { Character } from "./Character";
+import { PetPicker } from "./PetPicker";
 
 interface StatTileProps {
   label: string;
@@ -29,21 +32,52 @@ export function CharacterPanel() {
   const oneShot = usePetOneShot();
   const stage = useAppStore((s) => s.displayStage);
   const dequeueOneShot = useAppStore((s) => s.dequeueOneShot);
+  const species = useAppStore((s) => s.species);
+  const settingsLoaded = useAppStore((s) => s.settingsLoaded);
+  const chooseSpecies = useAppStore((s) => s.chooseSpecies);
+
+  // Only this panel cares whether the picker is open after the first run, so it stays local state.
+  const [choosing, setChoosing] = useState(false);
+  // Wait for the saved choice before deciding, so returning players never see the picker flash.
+  const showPicker = settingsLoaded && (species === null || choosing);
 
   const percent = Math.round((intoLevel / needed) * 100); // needed is always at least 100
 
   return (
-    <Panel id="character-heading" title="Monkey">
-      <div className="mx-auto w-fit">
-        <Character
-          species="monkey"
-          stage={stage}
-          mood={mood}
-          equipped={NO_ACCESSORIES}
-          oneShot={oneShot}
-          onOneShotDone={dequeueOneShot}
+    <Panel id="character-heading" title={species === null ? "Pet" : SPECIES_LABEL[species]}>
+      {!settingsLoaded ? (
+        // Same size as the pet (192 px), so nothing jumps when the saved choice arrives.
+        <div className="mx-auto h-48 w-48" aria-hidden="true" />
+      ) : showPicker ? (
+        <PetPicker
+          current={species}
+          onChoose={(chosen) => {
+            void chooseSpecies(chosen);
+            setChoosing(false);
+          }}
+          onCancel={species === null ? undefined : () => setChoosing(false)}
         />
-      </div>
+      ) : (
+        species !== null && (
+          <div className="mx-auto w-fit">
+            <Character
+              species={species}
+              stage={stage}
+              mood={mood}
+              equipped={NO_ACCESSORIES}
+              oneShot={oneShot}
+              onOneShotDone={dequeueOneShot}
+            />
+            <button
+              type="button"
+              onClick={() => setChoosing(true)}
+              className="mx-auto mt-2 block rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:text-accent"
+            >
+              Change pet
+            </button>
+          </div>
+        )
+      )}
 
       <div className="mt-5 flex items-center justify-between">
         <span className="rounded-md bg-accent px-2 py-0.5 font-pixel text-sm font-bold text-on-accent">

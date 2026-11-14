@@ -22,6 +22,8 @@ export function renderWith(partial: Partial<StoreState>, ui: ReactElement): stri
       lastCompletionAt: null,
       oneShots: [],
       displayStage: 1,
+      species: "monkey",
+      settingsLoaded: true,
       error: null,
     },
     partial,

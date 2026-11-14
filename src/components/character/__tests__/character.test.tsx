@@ -62,6 +62,31 @@ describe("Character", () => {
   });
 });
 
+describe("Character with each species", () => {
+  const species = ["monkey", "cat"] as const;
+
+  it("draws every species at every stage and mood", () => {
+    for (const sp of species) {
+      for (const stage of [1, 2, 3, 4] as Stage[]) {
+        for (const mood of ["idle", "happy", "sad", "sleepy"] as Mood[]) {
+          const out = html({ species: sp, stage, mood });
+          expect(count(out, "<svg")).toBe(1);
+          expect(out).toContain(`aria-label="${sp}, stage ${stage}, feeling ${mood}"`);
+        }
+      }
+    }
+  });
+
+  it("draws the cat differently from the monkey", () => {
+    expect(html({ species: "cat" })).not.toBe(html({ species: "monkey" }));
+  });
+
+  it("plays an evolve for the cat with two sprites, like the monkey", () => {
+    const out = html({ species: "cat", stage: 1, oneShot: { id: 7, kind: "evolve", toStage: 2 } });
+    expect(count(out, "<svg")).toBe(2);
+  });
+});
+
 describe("Character one-shots", () => {
   it("marks the playing one-shot and its length", () => {
     const out = html({ oneShot: { id: 1, kind: "celebrate" } });
