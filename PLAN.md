@@ -62,9 +62,10 @@ tasks-organizor/
 │  │  ├─ layout/                   # TitleBar, Panel, CompactView
 │  │  ├─ calendar/                 # CalendarPanel (react-day-picker), dateAdapters.ts (the only Date <-> ISODate conversion)
 │  │  ├─ tasks/                    # TaskPanel, TaskRow, QuickAdd
-│  │  ├─ shop/                     # ShopPanel, ItemCard
+│  │  ├─ shop/                     # ShopPanel, ItemCard (Phase 6)
 │  │  └─ character/
 │  │     ├─ Character.tsx          # implements CharacterProps
+│  │     ├─ PanelTabs.tsx          # Stats | Shop tabs under the pet (Phase 6)
 │  │     ├─ PixelSprite.tsx        # string grid + palette -> <rect>s
 │  │     ├─ composeLayers.ts       # stacks body, face, accessories into one grid
 │  │     ├─ oneShotTiming.ts       # one-shot durations shared by the CSS and the safety timeout
@@ -73,8 +74,8 @@ tasks-organizor/
 │  │     │  ├─ types.ts            # Species, Palette, Grid, SpeciesArt, GRID_SIZE
 │  │     │  ├─ index.ts            # SPECIES registry
 │  │     │  └─ monkey/             # palette.ts, stages/stage1..4.ts (bodies), faces/idle|happy|sad|sleepy.ts (overlays per stage)
-│  │     ├─ anchors.ts             # slot anchor per stage (Phase 6)
-│  │     └─ accessories/           # one file per item asset_key (Phase 6)
+│  │     ├─ anchors.ts             # eye and held-item positions per species and stage (Phase 6)
+│  │     └─ accessories/           # palette.ts, paste.ts, glasses.ts, laptop.ts, index.ts registry by asset_key (Phase 6)
 │  ├─ domain/                      # ANDREI
 │  │  ├─ types.ts
 │  │  ├─ config.ts                 # every tunable number lives here
@@ -84,7 +85,7 @@ tasks-organizor/
 │  │  ├─ levels.ts                 # levelFromXp, xpForLevel, stageForLevel
 │  │  ├─ streak.ts                 # streakFrom
 │  │  ├─ mood.ts                   # moodFor
-│  │  ├─ shop.ts                   # canPurchase
+│  │  ├─ shop.ts                   # canPurchase, equippedMap, shopEntries
 │  │  └─ __tests__/
 │  ├─ repositories/                # ANDREI
 │  │  ├─ db.ts                     # single Database.load, shared handle
@@ -99,7 +100,7 @@ tasks-organizor/
    ├─ Cargo.toml
    ├─ tauri.conf.json
    ├─ capabilities/default.json
-   ├─ migrations/001_init.sql
+   ├─ migrations/001_init.sql, 002_settings.sql, 003_shop.sql
    └─ src/lib.rs                   # plugin registration + migrations
 ```
 
@@ -164,6 +165,18 @@ CREATE TABLE settings (
 ```
 
 The chosen pet is saved under the key `species` (`monkey` or `cat`). A missing or unknown value means "not chosen yet" and shows the first-run picker.
+
+`src-tauri/migrations/003_shop.sql` (Phase 6):
+
+```sql
+ALTER TABLE reward_events ADD COLUMN item_id INTEGER REFERENCES items(id);  -- which item a 'purchase' event paid for
+
+INSERT INTO items (slot, name, price, min_level, asset_key) VALUES
+  ('glasses', 'Round Glasses', 10, 1, 'glasses_round'),
+  ('held',    'Laptop',        20, 1, 'laptop');
+```
+
+`item_id` is what makes a purchase retry-safe: "was this item already paid for?" is a lookup in the ledger (see section 5). It is NULL for every other kind of event. Prices are testing values and live in the database, so changing one is a new migration, not a code change. The two items fit both pets.
 
 Notes on the schema:
 
@@ -280,7 +293,10 @@ oneShotsFor(prevLevel: number, nextLevel: number): { kind: OneShot; toStage?: St
 
 // shop.ts
 canPurchase(item: Item, coins: number, level: number, owned: boolean):
-  { ok: true } | { ok: false; reason: 'owned' | 'coins' | 'level' }
+  { ok: true } | { ok: false; reason: 'owned' | 'level' | 'coins' }   // checked in that order
+equippedMap(items: Item[], owned: OwnedItem[]): Equipped              // slot -> assetKey; lowest id wins if two share a slot
+shopEntries(items: Item[], owned: OwnedItem[], coins: number, level: number): ShopEntry[]
+// ShopEntry = { item, state: 'buy' | 'locked-level' | 'locked-coins' | 'equip' | 'unequip', missingCoins, requiredLevel }
 ```
 
 ### Rules (starting values, all in `domain/config.ts`)
@@ -359,12 +375,14 @@ export interface SettingsRepo {
 export interface ShopRepo {
   listItems(): Promise<Item[]>;
   listOwned(): Promise<OwnedItem[]>;
-  /** Inserts inventory row AND a negative-coins purchase event. Must be atomic. */
+  /** Charges the price once (negative-coins purchase event naming the item), then gives it. Retry-safe, see below. */
   purchase(item: Item, today: ISODate): Promise<void>;
-  /** Unequips whatever else is in the same slot, then equips. Must be atomic. */
+  /** Equipping first unequips whatever else is in the same slot. Unowned items are ignored. */
   setEquipped(itemId: number, equipped: boolean): Promise<void>;
 }
 ```
+
+`purchase` is two guarded statements, in this order (Phase 6): (1) insert the `purchase` event with `item_id`, `coins = -price`, only if no purchase event exists for that item and the ledger balance covers the price (the price is read from `items` inside the SQL, never from the caller); (2) `INSERT OR IGNORE` the inventory row only if a purchase event for the item exists. A failure between the two is repaired by calling `purchase` again (no second charge, the item is given), and a double click cannot charge twice or give the item for free. `setEquipped(id, true)` first unequips the other items of the same slot, but only when the target is really owned, so a bad id can never strip what is worn. The store checks `canPurchase` first, then verifies after reloading that the item is really owned.
 
 Repository rules:
 
@@ -429,7 +447,9 @@ Two kinds of state: a looping base state chosen by `mood`, and one-shot animatio
 - `PixelSprite` turns a grid plus a palette into `<rect>` elements (horizontal runs merged) inside an `<svg viewBox="0 0 32 32" shape-rendering="crispEdges">`.
 - One shared palette file keeps fur, skin and outline colours identical across all four stages.
 - Layer order, back to front: `background`, body (by stage), face (by mood), `held`, `glasses`, `hat`.
-- `anchors.ts` stores the head and hand position per stage, so one hat grid fits all four bodies.
+- `anchors.ts` stores, per species and per stage, where the eyes are (top row and the left column of each 2x3 eye) and where a held item goes (top-left corner, just under the chin). Each accessory is drawn once and placed from these numbers, so one drawing fits both pets and all four stages. The numbers come from the sprites, so re-check them (`accessories.test.ts` does) whenever a sprite changes. A hat anchor is added with the first hat.
+- Accessories (Phase 6): `glasses_round` draws a 4x5 frame around each eye (the eyes show through) and a bridge as wide as the gap between the eyes; `laptop` is a 12x7 grid pasted at the held anchor, always below every face pixel. Accessory palette keys are UPPERCASE and pet keys lowercase, so `Character` merges both into one palette without clashes. `accessoryLayers(equipped, anchors)` returns `{ behind, front }`; an unknown asset key (stale database) draws nothing. `PixelSprite` accepts grids of any size (the viewBox follows the grid), which the shop icons use.
+- The shop sits under the pet in a Stats | Shop tab strip. Buying equips the item and plays the `equip` hop; equipping another item of the same slot swaps it; unequipping is silent.
 - Animation is CSS only: two-frame loops using `steps()` on transform or opacity. No per-frame redraws in React.
 - Stage progression reads as growth: stage 1 small, stage 4 the "buffed" monkey. Silhouette changes; palette does not.
 
@@ -459,7 +479,7 @@ The Phase 0 and Phase 1 components were written by the agent before this split a
 | 3 | Calendar | `dates.ts` with tests, range query, `selection` state and actions | CalendarPanel: day and range selection, task dots | A task on 16–18 Nov shows on all three days |
 | 4 | Gamification engine | `rewards`, `levels`, `streak` with Vitest tests; `rewardRepo`; ledger write inside `complete` | XP bar, level badge, coin and streak tiles | Tests pass; completing a task moves the XP bar |
 | 5 | Character | `moodFor`, `stageForLevel`, overdue sweep, one-shot queue in the store | `PixelSprite`, four stage bodies, four faces, state machine, animations | Completing a task plays `celebrate`; an overdue task shows `sad`; level 5 evolves |
-| 6 | Shop | `shopRepo`, `canPurchase`, seed items migration, purchase and equip actions | ShopPanel, accessory sprites, anchors | A bought hat persists after restart and fits every stage |
+| 6 | Shop | `shopRepo`, `canPurchase`, seed items migration, purchase and equip actions | ShopPanel, accessory sprites, anchors | A bought item (glasses, laptop) persists after restart and fits every stage of both pets |
 | 7 | Widget behaviour | Tray, autostart, notification, window-state and global-shortcut plugins; date-change timer | CompactView, tray-friendly layouts | The app lives in the tray and reminds of tasks due today |
 | 8 | Package | Icons, NSIS bundle config, JSON backup/export | Final visual polish pass | Installs from one `.exe` on another machine |
 | 9 | Stretch | Recurring tasks, weekly stats queries | Stats chart, themes, more accessories | Open |

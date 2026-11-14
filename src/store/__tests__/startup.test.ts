@@ -10,20 +10,26 @@ vi.mock("../../repositories/settingsRepo", () => ({
 vi.mock("../../repositories/rewardRepo", () => ({
   rewardRepo: { totals: vi.fn(), activeDaysSinceLastReset: vi.fn(), completedCount: vi.fn(), lastCompletionAt: vi.fn() },
 }));
+vi.mock("../../repositories/shopRepo", () => ({
+  shopRepo: { listItems: vi.fn(), listOwned: vi.fn(), purchase: vi.fn(), setEquipped: vi.fn() },
+}));
 
 async function freshStore() {
   vi.resetModules();
   const { taskRepo } = await import("../../repositories/taskRepo");
   const { rewardRepo } = await import("../../repositories/rewardRepo");
   const { settingsRepo } = await import("../../repositories/settingsRepo");
+  const { shopRepo } = await import("../../repositories/shopRepo");
   const { useAppStore } = await import("../useAppStore");
+  vi.mocked(shopRepo.listItems).mockResolvedValue([]);
+  vi.mocked(shopRepo.listOwned).mockResolvedValue([]);
   vi.mocked(taskRepo.listInRange).mockResolvedValue([]);
   vi.mocked(taskRepo.flagOverdue).mockResolvedValue(undefined);
   vi.mocked(rewardRepo.totals).mockResolvedValue({ xp: 0, coins: 0 });
   vi.mocked(rewardRepo.activeDaysSinceLastReset).mockResolvedValue([]);
   vi.mocked(rewardRepo.lastCompletionAt).mockResolvedValue(null);
   vi.mocked(settingsRepo.get).mockResolvedValue(null);
-  return { taskRepo, rewardRepo, settingsRepo, useAppStore };
+  return { taskRepo, rewardRepo, settingsRepo, shopRepo, useAppStore };
 }
 
 describe("startup", () => {
@@ -59,6 +65,18 @@ describe("startup", () => {
     expect(settingsRepo.get).toHaveBeenCalledTimes(1);
     expect(useAppStore.getState().species).toBe("cat");
     expect(useAppStore.getState().settingsLoaded).toBe(true);
+  });
+
+  it("also loads the shop items and the inventory, once", async () => {
+    const { shopRepo, useAppStore } = await freshStore();
+    vi.mocked(shopRepo.listItems).mockResolvedValue([
+      { id: 1, slot: "glasses", name: "Round Glasses", price: 10, minLevel: 1, assetKey: "glasses_round" },
+    ]);
+    vi.mocked(shopRepo.listOwned).mockResolvedValue([{ itemId: 1, equipped: true }]);
+    await Promise.all([useAppStore.getState().startup(), useAppStore.getState().startup()]);
+    expect(shopRepo.listItems).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().items).toHaveLength(1);
+    expect(useAppStore.getState().owned).toEqual([{ itemId: 1, equipped: true }]);
   });
 
   it("does not flag anything when nothing is overdue", async () => {

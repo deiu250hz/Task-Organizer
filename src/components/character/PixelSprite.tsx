@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import type { Grid, Palette } from "./species/types";
-import { GRID_SIZE } from "./species/types";
 
 export interface SpriteRect {
   x: number;
@@ -33,17 +32,24 @@ export function spriteRects(grid: Grid, palette: Palette): SpriteRect[] {
 export interface PixelSpriteProps {
   grid: Grid;
   palette: Palette;
-  /** Size in CSS pixels. Use a multiple of 32 so every sprite pixel is a whole number of screen pixels. */
+  /**
+   * Width in CSS pixels; the height follows the grid's shape (a square grid is drawn square).
+   * Use a multiple of the grid's width so every sprite pixel is a whole number of screen pixels:
+   * a multiple of 32 for the pets, of 12 for the laptop icon, and so on.
+   */
   size: number;
 }
 
 export function PixelSprite({ grid, palette, size }: PixelSpriteProps) {
   const rects = useMemo(() => spriteRects(grid, palette), [grid, palette]);
+  // The grid can be any size (pets are 32x32, shop icons are small), so the viewBox follows it.
+  const columns = Math.max(1, ...grid.map((row) => row.length));
+  const rows = Math.max(1, grid.length);
   return (
     <svg
       width={size}
-      height={size}
-      viewBox={`0 0 ${GRID_SIZE} ${GRID_SIZE}`}
+      height={(size * rows) / columns}
+      viewBox={`0 0 ${columns} ${rows}`}
       shapeRendering="crispEdges"
       aria-hidden="true"
     >

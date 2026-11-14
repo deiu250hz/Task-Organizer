@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Panel } from "../layout/Panel";
 import { SPECIES_LABEL } from "../../domain/species";
-import { usePetMood, usePetOneShot, usePlayerProgress } from "../../store/selectors";
+import { useEquipped, usePetMood, usePetOneShot, usePlayerProgress } from "../../store/selectors";
 import { useAppStore } from "../../store/useAppStore";
-import type { Equipped } from "../../domain/types";
+import { ShopPanel } from "../shop/ShopPanel";
 import { Character } from "./Character";
+import { PanelTabs, PET_TABPANEL_ID, petTabId, type PanelTab } from "./PanelTabs";
 import { PetPicker } from "./PetPicker";
 
 interface StatTileProps {
@@ -22,12 +23,10 @@ function StatTile({ label, value, valueClass }: StatTileProps) {
   );
 }
 
-// No accessories until the shop exists (Phase 6). One constant, so the prop never changes identity.
-const NO_ACCESSORIES: Equipped = { hat: null, glasses: null, held: null, background: null };
-
 export function CharacterPanel() {
   // Level, XP, coins and streak are derived from the ledger totals held in the store.
   const { level, intoLevel, needed, coins, streak } = usePlayerProgress();
+  const equipped = useEquipped(); // what the pet wears, from the shop inventory
   const mood = usePetMood();
   const oneShot = usePetOneShot();
   const stage = useAppStore((s) => s.displayStage);
@@ -40,6 +39,8 @@ export function CharacterPanel() {
   const [choosing, setChoosing] = useState(false);
   // Wait for the saved choice before deciding, so returning players never see the picker flash.
   const showPicker = settingsLoaded && (species === null || choosing);
+  // Which tab is open under the pet: also local, since nothing else needs it.
+  const [tab, setTab] = useState<PanelTab>("stats");
 
   const percent = Math.round((intoLevel / needed) * 100); // needed is always at least 100
 
@@ -64,7 +65,7 @@ export function CharacterPanel() {
               species={species}
               stage={stage}
               mood={mood}
-              equipped={NO_ACCESSORIES}
+              equipped={equipped}
               oneShot={oneShot}
               onOneShotDone={dequeueOneShot}
             />
@@ -79,34 +80,44 @@ export function CharacterPanel() {
         )
       )}
 
-      <div className="mt-5 flex items-center justify-between">
-        <span className="rounded-md bg-accent px-2 py-0.5 font-pixel text-sm font-bold text-on-accent">
-          LVL {level}
-        </span>
-        <span className="font-pixel text-xs text-text-muted">
-          {intoLevel} / {needed} XP
-        </span>
-      </div>
+      <PanelTabs active={tab} onChange={setTab} />
 
-      <div
-        role="progressbar"
-        aria-label="Experience"
-        aria-valuemin={0}
-        aria-valuemax={needed}
-        aria-valuenow={intoLevel}
-        aria-valuetext={`${intoLevel} of ${needed} XP`}
-        className="mt-2 h-3 overflow-hidden rounded-full border border-border bg-bg"
-      >
-        {/* The width animates; the global reduced-motion rule in index.css turns that off. */}
-        <div
-          className="h-full bg-xp transition-[width] duration-500 ease-out"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
+      <div id={PET_TABPANEL_ID} role="tabpanel" aria-labelledby={petTabId(tab)} className="mt-4">
+        {tab === "stats" ? (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="rounded-md bg-accent px-2 py-0.5 font-pixel text-sm font-bold text-on-accent">
+                LVL {level}
+              </span>
+              <span className="font-pixel text-xs text-text-muted">
+                {intoLevel} / {needed} XP
+              </span>
+            </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <StatTile label="Coins" value={String(coins)} valueClass="text-coin" />
-        <StatTile label="Streak" value={`${streak} d`} valueClass="text-streak" />
+            <div
+              role="progressbar"
+              aria-label="Experience"
+              aria-valuemin={0}
+              aria-valuemax={needed}
+              aria-valuenow={intoLevel}
+              aria-valuetext={`${intoLevel} of ${needed} XP`}
+              className="mt-2 h-3 overflow-hidden rounded-full border border-border bg-bg"
+            >
+              {/* The width animates; the global reduced-motion rule in index.css turns that off. */}
+              <div
+                className="h-full bg-xp transition-[width] duration-500 ease-out"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <StatTile label="Coins" value={String(coins)} valueClass="text-coin" />
+              <StatTile label="Streak" value={`${streak} d`} valueClass="text-streak" />
+            </div>
+          </>
+        ) : (
+          <ShopPanel />
+        )}
       </div>
     </Panel>
   );
