@@ -1,8 +1,16 @@
 import { useMemo } from "react";
 import { levelFromXp } from "../domain/levels";
-import { anyTaskOn, tasksInRange } from "../domain/tasks";
-import type { ISODate, Task } from "../domain/types";
+import { moodFor } from "../domain/mood";
+import {
+  anyTaskOn,
+  countActiveOn,
+  countCompletedOn,
+  countOverdue,
+  tasksInRange,
+} from "../domain/tasks";
+import type { ISODate, Mood, QueuedOneShot, Task } from "../domain/types";
 import { useAppStore } from "./useAppStore";
+import { useNow } from "./useNow";
 
 // These hooks read only stable slices (tasks, selection, totals, streak) and derive the result
 // with useMemo. A selector that built a new array or object itself would return a different
@@ -43,4 +51,34 @@ export function useVisibleTasks(): Task[] {
 export function useHasTaskOn(): (day: ISODate) => boolean {
   const tasks = useAppStore((s) => s.tasks);
   return useMemo(() => (day: ISODate) => anyTaskOn(tasks, day), [tasks]);
+}
+
+const MS_PER_MINUTE = 60_000;
+
+/**
+ * The pet's mood, derived from the tasks and the clock. It is recomputed when a task changes
+ * and every 30 seconds, so the happy hour ends on its own. Reads stable slices only.
+ */
+export function usePetMood(): Mood {
+  const tasks = useAppStore((s) => s.tasks);
+  const today = useAppStore((s) => s.today);
+  const lastCompletionAt = useAppStore((s) => s.lastCompletionAt);
+  const now = useNow();
+  return useMemo(
+    () =>
+      moodFor({
+        overdueCount: countOverdue(tasks, today),
+        completedToday: countCompletedOn(tasks, today),
+        activeDueToday: countActiveOn(tasks, today),
+        localHour: new Date(now).getHours(),
+        minutesSinceLastCompletion:
+          lastCompletionAt === null ? null : (now - lastCompletionAt) / MS_PER_MINUTE,
+      }),
+    [tasks, today, lastCompletionAt, now],
+  );
+}
+
+/** The animation playing now (the head of the queue), or null when nothing is pending. */
+export function usePetOneShot(): QueuedOneShot | null {
+  return useAppStore((s) => s.oneShots[0] ?? null);
 }

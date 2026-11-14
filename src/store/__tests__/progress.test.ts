@@ -7,10 +7,21 @@ import { useAppStore } from "../useAppStore";
 // SQL cannot run in Vitest, so both repositories are replaced by mocks. These tests check the
 // store's orchestration: which reward it computes and what it does with the results.
 vi.mock("../../repositories/taskRepo", () => ({
-  taskRepo: { listInRange: vi.fn(), create: vi.fn(), complete: vi.fn() },
+  taskRepo: {
+    listInRange: vi.fn(),
+    create: vi.fn(),
+    complete: vi.fn(),
+    flagOverdue: vi.fn(),
+    markFlagged: vi.fn(),
+  },
 }));
 vi.mock("../../repositories/rewardRepo", () => ({
-  rewardRepo: { totals: vi.fn(), activeDaysSinceLastReset: vi.fn(), completedCount: vi.fn() },
+  rewardRepo: {
+    totals: vi.fn(),
+    activeDaysSinceLastReset: vi.fn(),
+    completedCount: vi.fn(),
+    lastCompletionAt: vi.fn(),
+  },
 }));
 
 const TODAY = "2026-11-14";
@@ -32,17 +43,22 @@ function makeTask(id: number, difficulty: Difficulty, status: Task["status"] = "
 const complete = vi.mocked(taskRepo.complete);
 const totals = vi.mocked(rewardRepo.totals);
 const activeDays = vi.mocked(rewardRepo.activeDaysSinceLastReset);
+const lastCompletion = vi.mocked(rewardRepo.lastCompletionAt);
 
 beforeEach(() => {
   vi.resetAllMocks();
   complete.mockResolvedValue(undefined);
   totals.mockResolvedValue({ xp: 0, coins: 0 });
   activeDays.mockResolvedValue([]);
+  lastCompletion.mockResolvedValue(null);
   useAppStore.setState({
     tasks: [makeTask(1, 2)], // medium: 25 XP / 10 coins before any bonus
     today: TODAY,
     totals: { xp: 0, coins: 0 },
     streak: 0,
+    lastCompletionAt: null,
+    oneShots: [],
+    displayStage: 1,
     error: null,
   });
 });
