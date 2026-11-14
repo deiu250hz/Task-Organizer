@@ -47,6 +47,14 @@ describe("PixelSprite", () => {
     expect(html).toContain('shape-rendering="crispEdges"');
   });
 
+  it("fits the viewBox and the height to a small, non-square grid", () => {
+    const icon = ["ff..", "ff..", "kkkk"];
+    const html = renderToStaticMarkup(<PixelSprite grid={icon} palette={palette} size={48} />);
+    expect(html).toContain('viewBox="0 0 4 3"');
+    expect(html).toContain('width="48"');
+    expect(html).toContain('height="36"');
+  });
+
   it("draws one rect per run", () => {
     const html = renderToStaticMarkup(<PixelSprite grid={grid} palette={palette} size={64} />);
     expect(html.match(/<rect /g)).toHaveLength(1);
