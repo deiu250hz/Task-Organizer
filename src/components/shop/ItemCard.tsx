@@ -73,7 +73,7 @@ export function ItemCard({ entry, onBuy, onToggleEquip }: ItemCardProps) {
           className={`shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
             state === "unequip"
               ? "border-xp text-xp hover:bg-bg"
-              : "border-border text-text hover:border-accent hover:text-accent"
+              : "border-border-strong text-text hover:border-accent hover:text-accent"
           }`}
         >
           {state === "unequip" ? "Unequip" : "Equip"}

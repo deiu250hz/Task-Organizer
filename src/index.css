@@ -11,6 +11,9 @@
   --color-surface: #1e1b2e;
   --color-surface-raised: #29253d;
   --color-border: #3d3858;
+  /* For the edges of controls (inputs, outlined buttons): at least 3:1 on bg, surface and surface-raised.
+     --color-border stays for panels and dividers, where the line is decoration. */
+  --color-border-strong: #776fa0;
 
   /* Text (contrast on bg and surface: text >= 12:1, text-muted >= 6:1) */
   --color-text: #f1edff;
@@ -58,6 +61,17 @@
   :focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
+  }
+
+  /* Thin scrollbars in the theme colours instead of the system's light ones. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+    color: var(--color-text);
   }
 }
 

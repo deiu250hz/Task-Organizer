@@ -40,7 +40,7 @@ export function PetPicker({ current, onChoose, onCancel }: PetPickerProps) {
                 onClick={() => onChoose(species)}
                 aria-pressed={isCurrent}
                 aria-label={isCurrent ? `${SPECIES_LABEL[species]}, current pet` : SPECIES_LABEL[species]}
-                className="flex w-full flex-col items-center gap-1 rounded-md border border-border bg-bg p-2 transition-colors hover:border-accent aria-pressed:border-accent aria-pressed:bg-surface-raised"
+                className="flex w-full flex-col items-center gap-1 rounded-md border border-border-strong bg-bg p-2 transition-colors hover:border-accent aria-pressed:border-accent aria-pressed:bg-surface-raised"
               >
                 {/* 96 px is 3 x 32, so every sprite pixel stays square. */}
                 <PixelSprite grid={previewFor(species)} palette={SPECIES[species].palette} size={96} />

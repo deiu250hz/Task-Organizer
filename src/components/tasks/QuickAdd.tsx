@@ -56,7 +56,7 @@ export function QuickAdd() {
               ? "Add a task for today…"
               : `Add a task for ${formatDayRange(startDate, endDate)}…`
         }
-        className="min-w-40 flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text placeholder:text-text-muted disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-w-40 flex-1 rounded-md border border-border-strong bg-bg px-3 py-2 text-sm text-text placeholder:text-text-muted disabled:cursor-not-allowed disabled:opacity-50"
       />
 
       <label htmlFor="quick-add-difficulty" className="sr-only">
@@ -71,7 +71,7 @@ export function QuickAdd() {
           if (next === 1 || next === 2 || next === 3) setDifficulty(next);
         }}
         disabled={!canAdd}
-        className="rounded-md border border-border bg-bg px-2 py-2 text-sm text-text disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-border-strong bg-bg px-2 py-2 text-sm text-text disabled:cursor-not-allowed disabled:opacity-50"
       >
         {DIFFICULTIES.map((option) => (
           <option key={option.value} value={option.value}>
