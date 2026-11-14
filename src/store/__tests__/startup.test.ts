@@ -13,6 +13,9 @@ vi.mock("../../repositories/rewardRepo", () => ({
 vi.mock("../../repositories/shopRepo", () => ({
   shopRepo: { listItems: vi.fn(), listOwned: vi.fn(), purchase: vi.fn(), setEquipped: vi.fn() },
 }));
+vi.mock("../../platform/notifier", () => ({
+  notifier: { notify: vi.fn() },
+}));
 
 async function freshStore() {
   vi.resetModules();
@@ -20,7 +23,9 @@ async function freshStore() {
   const { rewardRepo } = await import("../../repositories/rewardRepo");
   const { settingsRepo } = await import("../../repositories/settingsRepo");
   const { shopRepo } = await import("../../repositories/shopRepo");
+  const { notifier } = await import("../../platform/notifier");
   const { useAppStore } = await import("../useAppStore");
+  vi.mocked(notifier.notify).mockResolvedValue(true);
   vi.mocked(shopRepo.listItems).mockResolvedValue([]);
   vi.mocked(shopRepo.listOwned).mockResolvedValue([]);
   vi.mocked(taskRepo.listInRange).mockResolvedValue([]);
@@ -29,7 +34,7 @@ async function freshStore() {
   vi.mocked(rewardRepo.activeDaysSinceLastReset).mockResolvedValue([]);
   vi.mocked(rewardRepo.lastCompletionAt).mockResolvedValue(null);
   vi.mocked(settingsRepo.get).mockResolvedValue(null);
-  return { taskRepo, rewardRepo, settingsRepo, shopRepo, useAppStore };
+  return { taskRepo, rewardRepo, settingsRepo, shopRepo, notifier, useAppStore };
 }
 
 describe("startup", () => {
@@ -58,13 +63,46 @@ describe("startup", () => {
     expect(taskRepo.listInRange).toHaveBeenCalledTimes(1);
   });
 
-  it("also reads the saved pet, once", async () => {
+  it("also reads the saved settings (pet and reminders), once", async () => {
     const { settingsRepo, useAppStore } = await freshStore();
-    vi.mocked(settingsRepo.get).mockResolvedValue("cat");
+    vi.mocked(settingsRepo.get).mockImplementation(async (key) =>
+      key === "species" ? "cat" : key === "reminders" ? "0" : key === "lastReminderDay" ? "2026-11-14" : null,
+    );
     await Promise.all([useAppStore.getState().startup(), useAppStore.getState().startup()]);
-    expect(settingsRepo.get).toHaveBeenCalledTimes(1);
+    // three keys, read once: a second startup() call shares the first run
+    expect(settingsRepo.get).toHaveBeenCalledTimes(3);
+    expect(settingsRepo.get).toHaveBeenCalledWith("species");
+    expect(settingsRepo.get).toHaveBeenCalledWith("reminders");
+    expect(settingsRepo.get).toHaveBeenCalledWith("lastReminderDay");
     expect(useAppStore.getState().species).toBe("cat");
+    expect(useAppStore.getState().remindersEnabled).toBe(false);
+    expect(useAppStore.getState().lastReminderDay).toBe("2026-11-14");
     expect(useAppStore.getState().settingsLoaded).toBe(true);
+  });
+
+  it("treats a missing reminders setting as on", async () => {
+    const { useAppStore } = await freshStore();
+    await useAppStore.getState().startup();
+    expect(useAppStore.getState().remindersEnabled).toBe(true);
+    expect(useAppStore.getState().lastReminderDay).toBeNull();
+  });
+
+  it("sends the reminder last, once, when something is due today", async () => {
+    const { taskRepo, settingsRepo, notifier, useAppStore } = await freshStore();
+    const today = useAppStore.getState().today;
+    vi.mocked(taskRepo.listInRange).mockResolvedValue([
+      { id: 1, title: "Due", notes: null, startDate: today, endDate: today, difficulty: 1, status: "active", overdueFlagged: false, completedOn: null },
+    ]);
+    await Promise.all([useAppStore.getState().startup(), useAppStore.getState().startup()]);
+    expect(notifier.notify).toHaveBeenCalledTimes(1);
+    expect(notifier.notify).toHaveBeenCalledWith("Tasks Organizer", "1 task due today.");
+    expect(settingsRepo.set).toHaveBeenCalledWith("lastReminderDay", today);
+  });
+
+  it("sends nothing when no task is due or overdue", async () => {
+    const { notifier, useAppStore } = await freshStore();
+    await useAppStore.getState().startup();
+    expect(notifier.notify).not.toHaveBeenCalled();
   });
 
   it("also loads the shop items and the inventory, once", async () => {

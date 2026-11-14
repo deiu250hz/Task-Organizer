@@ -2,11 +2,12 @@ import { create } from "zustand";
 import { toISODate } from "../domain/dates";
 import { levelFromXp, stageForLevel } from "../domain/levels";
 import { oneShotsFor } from "../domain/oneShots";
+import { reminderMessage, shouldRemind } from "../domain/reminders";
 import { rewardFor } from "../domain/rewards";
 import { canPurchase } from "../domain/shop";
 import { isSpecies, type Species } from "../domain/species";
 import { streakFrom } from "../domain/streak";
-import { canDelete, canStartOn, newlyOverdue } from "../domain/tasks";
+import { canDelete, canStartOn, countActiveOn, countOverdue, newlyOverdue } from "../domain/tasks";
 import type {
   DateSelection,
   ISODate,
@@ -18,6 +19,7 @@ import type {
   Task,
   Totals,
 } from "../domain/types";
+import { notifier } from "../platform/notifier";
 import { rewardRepo } from "../repositories/rewardRepo";
 import { settingsRepo } from "../repositories/settingsRepo";
 import { shopRepo } from "../repositories/shopRepo";
@@ -28,14 +30,23 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// The settings key under which the chosen pet is saved.
+// The settings keys: the chosen pet, whether reminders are on ("1" / "0", a missing key means on),
+// and the last day a reminder was sent (so there is at most one a day, even across restarts).
 const SPECIES_KEY = "species";
+const REMINDERS_KEY = "reminders";
+const LAST_REMINDER_KEY = "lastReminderDay";
+
+const REMINDER_TITLE = "Tasks Organizer";
 
 // Ids only need to be unique while the app runs; the queue is never saved.
 let nextOneShotId = 1;
 
 // startup() must run its steps once, even if React calls the effect twice (StrictMode in dev).
 let startupPromise: Promise<void> | null = null;
+
+// refreshDay() can be triggered by the interval and by a focus event at the same moment. While one
+// refresh runs, every caller gets that same promise, so the work happens once.
+let refreshPromise: Promise<void> | null = null;
 
 // Items being bought right now. A second click on the same Buy button is ignored until the first
 // purchase finishes (the SQL guards already prevent a double charge; this also stops a double animation).
@@ -61,6 +72,10 @@ interface AppState {
   species: Species | null;
   /** False until the saved choice has been read, so the picker does not flash for returning players. */
   settingsLoaded: boolean;
+  /** Whether the task reminder is on. Saved in settings; on by default. */
+  remindersEnabled: boolean;
+  /** The day a reminder was last sent, or null. Saved in settings. */
+  lastReminderDay: ISODate | null;
   /** Everything the shop sells. Static data, loaded once at startup. */
   items: Item[];
   /** What the player has bought and whether it is worn. */
@@ -73,8 +88,16 @@ interface AppState {
   /** Loads tasks, flags newly overdue ones, then loads progress. Runs its steps once per app run. */
   startup(): Promise<void>;
   loadTasks(): Promise<void>;
-  /** Reads the saved pet. A missing or unknown value counts as not chosen. */
+  /** Reads the saved pet and the reminder settings. A missing or unknown pet counts as not chosen. */
   loadSettings(): Promise<void>;
+  /** Saves the setting, then updates the state. On failure the old value stays and `error` is set. */
+  setRemindersEnabled(enabled: boolean): Promise<void>;
+  /** Sends the daily reminder if the rules allow it (see domain/reminders). Saves the day only if it was really sent. */
+  remindIfDue(): Promise<void>;
+  /** Sends a sample notification now, ignoring the daily limit. Resolves true when it was shown. */
+  sendTestReminder(): Promise<boolean>;
+  /** When the real day is no longer `today`: reload, sweep overdue, reload progress, remind. Does nothing otherwise. */
+  refreshDay(): Promise<void>;
   /** Saves the choice, then updates the state. Level, XP and coins carry over: the pet is only a skin. */
   chooseSpecies(species: Species): Promise<void>;
   /** Tasks that became overdue reset the streak once each, then get flagged. */
@@ -113,6 +136,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   displayStage: 1,
   species: null,
   settingsLoaded: false,
+  remindersEnabled: true,
+  lastReminderDay: null,
   items: [],
   owned: [],
   error: null,
@@ -131,6 +156,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         await Promise.all([get().loadSettings(), get().loadTasks(), get().loadShop()]);
         await get().sweepOverdue();
         await get().loadProgress();
+        await get().remindIfDue(); // last: it needs the tasks, the settings and the overdue sweep
       })();
     }
     return startupPromise;
@@ -149,8 +175,17 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const saved = await settingsRepo.get(SPECIES_KEY);
-      set({ species: isSpecies(saved) ? saved : null, settingsLoaded: true });
+      const [saved, reminders, lastReminder] = await Promise.all([
+        settingsRepo.get(SPECIES_KEY),
+        settingsRepo.get(REMINDERS_KEY),
+        settingsRepo.get(LAST_REMINDER_KEY),
+      ]);
+      set({
+        species: isSpecies(saved) ? saved : null,
+        remindersEnabled: reminders !== "0", // missing (never set) means on
+        lastReminderDay: lastReminder, // any other day than today simply means "not reminded today"
+        settingsLoaded: true,
+      });
     } catch (error) {
       // Still mark it loaded, so the picker can appear instead of an empty box.
       set({ error: messageOf(error), settingsLoaded: true });
@@ -165,6 +200,62 @@ export const useAppStore = create<AppState>()((set, get) => ({
     } catch (error) {
       set({ error: messageOf(error) }); // keep the previous pet
     }
+  },
+
+  setRemindersEnabled: async (enabled) => {
+    if (get().remindersEnabled === enabled) return;
+    try {
+      await settingsRepo.set(REMINDERS_KEY, enabled ? "1" : "0");
+      set({ remindersEnabled: enabled, error: null });
+    } catch (error) {
+      set({ error: messageOf(error) }); // keep the previous value: the checkbox stays where it was
+    }
+  },
+
+  remindIfDue: async () => {
+    const { tasks, today, remindersEnabled, lastReminderDay } = get();
+    // The two counts never overlap: "due today" are active tasks whose dates include today, overdue
+    // are active tasks that ended before it. The sweep runs before this, so both are up to date.
+    const dueToday = countActiveOn(tasks, today);
+    const overdue = countOverdue(tasks, today);
+    if (!shouldRemind({ enabled: remindersEnabled, today, lastRemindedDay: lastReminderDay, dueToday, overdue })) return;
+    const body = reminderMessage(dueToday, overdue);
+    if (body === null) return; // shouldRemind already said there is text; this narrows the type
+    const sent = await notifier.notify(REMINDER_TITLE, body);
+    if (!sent) return; // denied or failed: do not mark the day, so the next check tries again
+    try {
+      await settingsRepo.set(LAST_REMINDER_KEY, today);
+      set({ lastReminderDay: today });
+    } catch (error) {
+      set({ error: messageOf(error) });
+    }
+  },
+
+  sendTestReminder: () => notifier.notify(REMINDER_TITLE, "This is a test reminder. Your tasks will look like this."),
+
+  refreshDay: () => {
+    if (refreshPromise !== null) return refreshPromise;
+    // The same day: nothing to do. Any difference counts, forwards (midnight, wake from sleep) or
+    // backwards (the clock or time zone was changed), because the refresh is safe to repeat.
+    if (toISODate(new Date()) === get().today) return Promise.resolve();
+    refreshPromise = (async () => {
+      try {
+        await get().startup(); // never run in the middle of the first load
+        if (toISODate(new Date()) === get().today) return; // startup already brought us to the new day
+        // The same order as startup: loadTasks sets `today`, the sweep needs it, the reminder needs the sweep.
+        await get().loadTasks();
+        // loadTasks moves `today` only when it succeeded. If it failed, stop here: sweeping or
+        // reminding from the old tasks and the old day would be wrong, and `error` must stay visible.
+        // The next check will try again.
+        if (toISODate(new Date()) !== get().today) return;
+        await get().sweepOverdue();
+        await get().loadProgress();
+        await get().remindIfDue();
+      } finally {
+        refreshPromise = null; // let the next trigger run (also after a failure)
+      }
+    })();
+    return refreshPromise;
   },
 
   sweepOverdue: async () => {
