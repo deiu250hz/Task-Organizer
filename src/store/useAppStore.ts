@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { toISODate } from "../domain/dates";
-import type { ISODate, NewTask, Reward, Task } from "../domain/types";
+import type { DateSelection, ISODate, NewTask, Reward, Task } from "../domain/types";
 import { taskRepo } from "../repositories/taskRepo";
 
 // Temporary: replaced by rewardFor(difficulty, streakDays) when the rewards engine lands (Phase 4).
@@ -15,7 +15,13 @@ interface AppState {
   tasks: Task[];
   /** Local 'YYYY-MM-DD'. The store reads the clock; domain functions receive it as a parameter. */
   today: ISODate;
+  /** The days picked in the calendar. null means "no filter": show every task. */
+  selection: DateSelection | null;
   error: string | null;
+  selectDay(day: ISODate): void;
+  /** Accepts the two ends in either order and stores them as from <= to. */
+  selectRange(from: ISODate, to: ISODate): void;
+  clearSelection(): void;
   loadTasks(): Promise<void>;
   /** Resolves true when the task was created, false when it was rejected or failed (see `error`). */
   addTask(input: NewTask): Promise<boolean>;
@@ -25,7 +31,16 @@ interface AppState {
 export const useAppStore = create<AppState>()((set, get) => ({
   tasks: [],
   today: toISODate(new Date()),
+  selection: null,
   error: null,
+
+  selectDay: (day) => set({ selection: { from: day, to: day } }),
+
+  // 'YYYY-MM-DD' strings compare like dates, so swapping reversed ends needs no date functions.
+  selectRange: (from, to) =>
+    set({ selection: from <= to ? { from, to } : { from: to, to: from } }),
+
+  clearSelection: () => set({ selection: null }),
 
   // Replaces the whole list, so running it twice (StrictMode in dev) is harmless.
   loadTasks: async () => {
