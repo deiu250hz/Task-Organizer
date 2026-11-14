@@ -1,43 +1,50 @@
 # Tasks Organizor
 
-A gamified desktop task manager for Windows. Plan tasks on a calendar, complete them to earn XP and coins, and watch a retro pixel-art monkey level up, evolve and wear the accessories you buy.
+A gamified desktop task manager for Windows. Plan tasks on a calendar, complete them to earn XP and coins, and watch a retro pixel-art pet level up, evolve and wear the accessories you buy.
 
-> **Status:** early development (Phase 0 of 9). Features listed below are planned unless marked done in the [roadmap](#roadmap).
+> **Status:** Phases 0 to 7 of 9 are done: the app is fully playable and lives in the system tray. Packaging into an installer (Phase 8) and the stretch goals (Phase 9) are still to do. See the [roadmap](#roadmap).
 
 ## Features
 
-- **Calendar panel** — select a single day or a range of days and add tasks to them; days with tasks are marked.
-- **Task panel** — active, upcoming and completed tasks, with easy / medium / hard difficulty.
-- **Rewards** — each completed task earns XP and coins, with a bonus for daily streaks.
-- **Evolving character** — the monkey levels up with XP and changes form at levels 5, 10 and 25.
-- **Moods** — the monkey is idle, happy, sleepy or sad. An overdue task resets your streak and makes it sad until you complete something; you never lose XP or coins.
-- **Shop** — spend coins on hats, glasses, held items and backgrounds.
-- **Widget mode** — tray icon, compact always-on-top view, reminders and start with Windows.
-- **Local only** — all data stays in one SQLite file on your machine.
+- **Calendar panel**: select a single day or a range of days; days with tasks are marked. Tasks can only be added from today onwards, and overdue tasks from earlier days can still be completed.
+- **Task panel**: active, upcoming and completed tasks, with easy / medium / hard difficulty. Active tasks can be deleted (archived) after an inline confirmation; your earned XP and coins stay.
+- **Rewards**: each completed task earns XP and coins, with a bonus for daily streaks.
+- **Two pets**: pick a monkey or an Orange Tabby cat (and change your mind any time). Level, XP and coins belong to you, not the pet, so switching never loses progress.
+- **Evolving character**: the pet levels up with XP and changes form at levels 5, 10 and 25.
+- **Moods**: idle, happy, sleepy or sad. The pet is happy for an hour after you complete a task, and for the rest of the day once today's list is done. An overdue task resets your streak and makes it sad until you complete something; you never lose XP or coins.
+- **Shop**: spend coins on accessories that fit both pets at every stage. There are two items for now, Round Glasses and a Laptop. Buying one equips it, and one item can be worn per slot. The shop sits in a Stats | Shop tab under the pet.
+- **Lives in the tray**: the close button hides the window to the system tray. Left-click the tray icon to show or hide it, right-click for Show and Quit. Starting a second copy brings the first one forward.
+- **Reminders**: one notification a day, when the app starts or a new day begins, that tells you how many tasks are due today and how many are overdue. It can be turned off in the settings (gear icon in the title bar).
+- **New-day aware**: left running for days, the app moves to the new day on its own: it flags tasks that just became overdue and refreshes the pet's mood.
+- **Local only**: all data stays in one SQLite file on your machine.
+
+Not built yet: start with Windows, remembering the window size and position, a global shortcut, a compact always-on-top view, an installer, and more shop items (hats, backgrounds).
 
 ## Tech stack
 
-| Layer | Technology |
-| --- | --- |
-| Desktop shell | [Tauri 2](https://v2.tauri.app/) (Rust, WebView2) |
-| UI | React, TypeScript, Vite |
-| Styling | Tailwind CSS 4 |
-| State | Zustand |
-| Calendar | react-day-picker, date-fns |
-| Storage | SQLite via `tauri-plugin-sql` |
-| Character art | SVG pixel art generated in code (`shape-rendering="crispEdges"`) |
-| Tests | Vitest |
+| Layer         | Technology                                                                         |
+| ------------- | ---------------------------------------------------------------------------------- |
+| Desktop shell | [Tauri 2](https://v2.tauri.app/) (Rust, WebView2), tray, notification, single-instance plugins |
+| UI            | React, TypeScript, Vite                                                            |
+| Styling       | Tailwind CSS 4                                                                     |
+| State         | Zustand                                                                            |
+| Calendar      | react-day-picker, date-fns                                                         |
+| Storage       | SQLite via `tauri-plugin-sql`                                                      |
+| Character art | SVG pixel art generated in code (`shape-rendering="crispEdges"`)                   |
+| Tests         | Vitest                                                                             |
 
 ## Architecture
 
 ```
 components/  ->  store/  ->  domain/        (pure TypeScript game rules)
                         ->  repositories/  ->  SQLite
+                        ->  platform/      ->  system notifications
 ```
 
-- The UI never talks to the database; it reads state and calls actions on the Zustand store.
-- `domain/` holds every XP, level, streak, mood and shop rule as pure functions, with no React, Tauri or I/O imports, so it is fully unit-tested.
-- XP and coins are never stored as counters. They are sums over an append-only `reward_events` ledger.
+- The UI never talks to the database or the system; it reads state and calls actions on the Zustand store.
+- `domain/` holds every XP, level, streak, mood, shop and reminder rule as pure functions, with no React, Tauri or I/O imports and no clock reads, so it is fully unit-tested.
+- XP and coins are never stored as counters. They are sums over an append-only `reward_events` ledger; a purchase is a negative-coins event.
+- Writes that touch two things (completing a task, buying an item) are ordered, guarded statements that are safe to retry, because the SQL plugin cannot run a transaction across calls.
 
 The full design, schema and interfaces are in [`PLAN.md`](PLAN.md).
 
@@ -53,17 +60,18 @@ The full design, schema and interfaces are in [`PLAN.md`](PLAN.md).
 ### Run
 
 ```bash
-git clone https://github.com/<your-username>/tasks-organizor.git
-cd tasks-organizor
+git clone https://github.com/deiu250hz/Task-Organizer.git
+cd Task-Organizer
 npm install
 npm run tauri dev
 ```
 
-The first build compiles the Rust side and takes a few minutes.
+The first build compiles the Rust side and takes a few minutes. Because the close button hides the window to the tray, stop the app with Quit in the tray menu (or Ctrl+C in the terminal).
 
 ### Other commands
 
 ```bash
+npm run dev            # frontend only, in a browser (no Tauri APIs, no database)
 npm test               # unit tests (Vitest)
 npx tsc --noEmit       # type check
 npm run tauri build    # build the Windows installer
@@ -73,33 +81,30 @@ npm run tauri build    # build the Windows installer
 
 ```
 src/
-  components/     React UI and the pixel-art character
-  store/          Zustand store (actions orchestrate domain + repositories)
+  components/     React UI: layout, calendar, tasks, shop, and the pixel-art character
+  store/          Zustand store (actions orchestrate domain + repositories + platform)
   domain/         Pure game rules and their tests
   repositories/   SQL access, the only code that touches the database
+  platform/       System features other than SQL (notifications)
 src-tauri/
-  migrations/     Numbered SQL migrations
+  migrations/     Numbered SQL migrations (tasks and ledger, settings, shop)
   capabilities/   Tauri permission files
-  src/lib.rs      Plugin registration
+  src/lib.rs      Plugin registration, tray, close-to-tray, single instance
 ```
 
 ## Roadmap
 
-- [ ] 0. Toolchain and scaffold
-- [ ] 1. Window shell and three-panel layout
-- [ ] 2. SQLite storage and task CRUD
-- [ ] 3. Calendar with day and range selection
-- [ ] 4. Gamification engine: XP, levels, streaks
-- [ ] 5. Pixel-art monkey: 4 evolution stages, moods, animations
-- [ ] 6. Coin shop and accessories
-- [ ] 7. Widget behaviour: tray, compact mode, reminders, autostart
+- [x] 0. Toolchain and scaffold
+- [x] 1. Window shell and three-panel layout
+- [x] 2. SQLite storage and task CRUD
+- [x] 3. Calendar with day and range selection
+- [x] 4. Gamification engine: XP, levels, streaks
+- [x] 5. Pixel-art pets (monkey and cat): 4 evolution stages, moods, animations
+- [x] 6. Coin shop and accessories
+- [x] 7. Widget behaviour: tray, reminders, single instance, new-day refresh
 - [ ] 8. Packaging and installer
-- [ ] 9. Stretch: recurring tasks, weekly stats, themes
-
-## Contributing
-
-This is a personal learning project, so the core logic is written by hand on purpose. Bug reports and suggestions are welcome as issues.
+- [ ] 9. Stretch: start with Windows, window position, compact view, recurring tasks, weekly stats, themes, more accessories
 
 ## License
 
-Not yet chosen.
+[MIT](LICENSE)
