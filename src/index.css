@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/*
+ * Theme tokens. Every variable in @theme becomes a CSS variable and a family
+ * of utility classes: --color-surface -> bg-surface, text-surface, border-surface.
+ * Components must use these classes, never raw hex values.
+ */
+@theme {
+  /* Surfaces */
+  --color-bg: #14121f;
+  --color-surface: #1e1b2e;
+  --color-surface-raised: #29253d;
+  --color-border: #3d3858;
+
+  /* Text (contrast on bg and surface: text >= 12:1, text-muted >= 6:1) */
+  --color-text: #f1edff;
+  --color-text-muted: #b4aed0;
+
+  /* Interaction */
+  --color-accent: #f2a23a;
+  --color-accent-hover: #ffb85c;
+  --color-on-accent: #1a1203;
+  --color-focus: #7dd3fc;
+
+  /* Gamification */
+  --color-xp: #6ee7a8;
+  --color-coin: #fbd34d;
+  --color-streak: #fb7c4a;
+
+  /* State */
+  --color-success: #4ade80;
+  --color-danger: #ff6b7a;
+
+  /* Fonts: system stacks only, nothing downloaded */
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-pixel: "Cascadia Mono", Consolas, "Courier New", monospace;
+
+  /* Shape */
+  --radius-panel: 0.75rem;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-bg font-sans text-text antialiased;
+    margin: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
