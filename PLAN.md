@@ -317,7 +317,8 @@ Repository rules:
 - Rows are `snake_case`, domain objects are `camelCase`. Mapping happens in the repository and nowhere else.
 - SQLite has no boolean: map `0/1` to `boolean` in the repository.
 - Always use bound parameters (`$1`, `$2`), never string concatenation.
-- Atomic operations: the SQL plugin runs on a connection pool, so `BEGIN` and `COMMIT` sent as separate `execute()` calls may land on different connections. Verify how to get a real transaction before relying on one (Phase 2 investigation item).
+- Atomic operations: the SQL plugin runs on a connection pool, so `BEGIN` and `COMMIT` sent as separate `execute()` calls may land on different connections (confirmed in the plugin source, `tauri-plugin-sql` 2.6.0: each `execute` acquires its own pooled connection). A `BEGIN ... COMMIT` inside one `execute` is also unsafe, because a failing statement can return the connection to the pool with the transaction still open.
+- Decision (Phase 2): "must be atomic" is met with **ordered, idempotent, retry-safe writes** instead of one transaction. Each step is a single statement guarded so a retry finishes the work without repeating it. Example, `taskRepo.complete`: (1) insert the `task_done` row only if the task is active and has none yet, (2) mark the task done only if it is still active. If step 2 fails, calling `complete` again skips step 1 and finishes step 2, so the reward is paid once. Apply the same pattern to `reopen`, `purchase`, `setEquipped` and `flagOverdue`. A Rust command with a real sqlx transaction stays the fallback if a case cannot be made idempotent.
 
 ## 6. Character
 
@@ -404,6 +405,6 @@ Order rationale: phases 1–3 produce a usable task app before any game logic; p
 
 ## 9. Open items
 
-- Confirm the transaction approach for `tauri-plugin-sql` (Phase 2).
+- ~~Confirm the transaction approach for `tauri-plugin-sql` (Phase 2).~~ Decided: ordered, idempotent, retry-safe writes (see section 5, repository rules).
 - Decide whether `reopen` stays in v1 or completed tasks are final.
 - Tune `config.ts` after one week of real use.
