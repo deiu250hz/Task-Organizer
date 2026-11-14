@@ -46,6 +46,7 @@ components/  ->  store/  ->  domain/        (pure)
 5. **The store orchestrates.** An action computes with a domain function, persists through a repository, then updates state. Components contain no business rules.
 6. **`Character` is presentational.** It takes `CharacterProps` and imports nothing from `store/` or `repositories/`.
 7. **XP and coins are never stored as counters.** They are sums over `reward_events`.
+8. **System features other than SQL live in `src/platform/`.** Notifications go through `src/platform/notifier.ts`, which only the store imports; components and `domain/` never import `@tauri-apps/plugin-notification`. The wrapper never throws and returns `false` outside Tauri. (The title bar's window buttons call `@tauri-apps/api/window` directly; that predates this rule.)
 
 If a change would break one of these, stop and explain the conflict instead of working around it.
 
@@ -113,7 +114,7 @@ Bring these up when the relevant code is being written; do not wait to be asked.
 - **Types coming back from SQL.** No booleans (0/1), no date type (TEXT), and columns arrive `snake_case`.
 - **Bound parameters.** `$1, $2, …` always; never build SQL by concatenation.
 - **Atomic writes.** `complete`, `reopen`, `purchase`, `setEquipped` and `flagOverdue` each change two things. The SQL plugin uses a connection pool, so separate `BEGIN` / `COMMIT` calls are not guaranteed to share a connection. Have him verify the transaction approach before relying on it.
-- **Capabilities.** `sql:default` covers load, select and close. Writes need `sql:allow-execute` in `src-tauri/capabilities/default.json`.
+- **Capabilities.** `sql:default` covers load, select and close. Writes need `sql:allow-execute` in `src-tauri/capabilities/default.json`, and notifications need `notification:default`. The tray, close-to-tray and single-instance behaviour live in Rust (`src-tauri/src/lib.rs`), so they need no capability entries.
 - **Streak definition.** Consecutive local days with a `task_done` event, counted back from today or yesterday, cut at the last `streak_reset`. Each overdue task resets the streak once (`overdue_flagged`).
 - **Overdue rule.** Overdue never removes XP or coins. It resets the streak and makes mood `sad` until a task is completed that day.
 - **Level maths.** `levelFromXp` must handle 0 XP, exact thresholds and very large XP without an unbounded loop bug.

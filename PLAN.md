@@ -36,9 +36,12 @@ Tauri shell (Rust) + SQLite    src-tauri/
 | Layer | May import | Must not import |
 | --- | --- | --- |
 | `components/` | `store/`, `domain/` (types and pure helpers), other components | `repositories/`, `@tauri-apps/plugin-sql` |
-| `store/` | `domain/`, `repositories/` | React components |
+| `store/` | `domain/`, `repositories/`, `platform/` | React components |
 | `domain/` | `date-fns`, other `domain/` files | React, Zustand, `@tauri-apps/*`, `repositories/`, `store/` |
 | `repositories/` | `@tauri-apps/plugin-sql`, `domain/` types | React, `store/`, `components/` |
+| `platform/` (Phase 7) | `@tauri-apps/plugin-notification` (system features other than SQL) | React, `store/`, `components/`, `domain/` |
+
+`platform/` is to system features (notifications) what `repositories/` is to SQL: one thin wrapper per feature, called only by the store, that never throws and degrades quietly outside Tauri. The title bar's window buttons call `@tauri-apps/api/window` directly; that predates `platform/` and stays as reference code.
 
 Two extra rules that keep the domain testable:
 
@@ -59,7 +62,7 @@ tasks-organizor/
 │  ├─ App.tsx                      # three-panel grid, wires store to panels
 │  ├─ index.css                    # @import "tailwindcss"; theme tokens
 │  ├─ components/                  # AGENT
-│  │  ├─ layout/                   # TitleBar, Panel, CompactView
+│  │  ├─ layout/                   # TitleBar, Panel, SettingsMenu + SettingsPanel (Phase 7); CompactView is deferred
 │  │  ├─ calendar/                 # CalendarPanel (react-day-picker), dateAdapters.ts (the only Date <-> ISODate conversion)
 │  │  ├─ tasks/                    # TaskPanel, TaskRow, QuickAdd
 │  │  ├─ shop/                     # ShopPanel, ItemCard (Phase 6)
@@ -86,14 +89,18 @@ tasks-organizor/
 │  │  ├─ streak.ts                 # streakFrom
 │  │  ├─ mood.ts                   # moodFor
 │  │  ├─ shop.ts                   # canPurchase, equippedMap, shopEntries
+│  │  ├─ reminders.ts              # reminderMessage, shouldRemind (Phase 7)
 │  │  └─ __tests__/
 │  ├─ repositories/                # ANDREI
 │  │  ├─ db.ts                     # single Database.load, shared handle
 │  │  ├─ taskRepo.ts
 │  │  ├─ rewardRepo.ts
 │  │  └─ shopRepo.ts
+│  ├─ platform/                    # notifier.ts: the only importer of the notification plugin (Phase 7)
 │  └─ store/                       # ANDREI
 │     ├─ useAppStore.ts
+│     ├─ useNow.ts                 # the clock, refreshed every 30 s
+│     ├─ useDayWatcher.ts          # asks the store to refresh when the real day changes (Phase 7)
 │     ├─ selectors.ts              # useVisibleTasks, useHasTaskOn (derive with useMemo, stable slices only)
 │     └─ __tests__/
 └─ src-tauri/                      # ANDREI
@@ -324,7 +331,7 @@ First match wins:
 
 ### Overdue sweep
 
-Runs on app start (`startup()`: load tasks, sweep, load progress; memoized so StrictMode cannot run it twice) and, from Phase 7, whenever the local date changes while the app is open. Until then, leaving the app open past midnight does not sweep until the next start.
+Runs on app start (`startup()`: load tasks, sweep, load progress, remind; memoized so StrictMode cannot run it twice) and, since Phase 7, whenever the local date changes while the app is open (`refreshDay()`, below).
 
 1. Find tasks where `status = 'active' AND end_date < today AND overdue_flagged = 0` (derived from the tasks already in the store).
 2. If any exist: insert one `streak_reset` event for `today`, then set `overdue_flagged = 1` on those tasks. In this order so a retry is safe: a duplicate reset leaves the streak unchanged because the streak is cut at the last reset.
@@ -335,6 +342,17 @@ No task is ever created already overdue: **a new task must start today or later*
 Note on the mood: `sad` needs an overdue task AND nothing completed today. Completing something today (or within the last hour) makes the pet happy even while an older task is still overdue.
 
 Each task resets the streak once. A task that stays overdue for a week does not reset it seven times, but it keeps `overdueCount > 0`, so the monkey turns `sad` again each morning until something is completed that day.
+
+### Widget behaviour (Phase 7)
+
+The app is meant to stay running in the tray for days.
+
+- **Tray (Rust, `lib.rs`):** a tray icon with a right-click menu (Show, Quit); a left-click toggles the window. The X button hides the window (`CloseRequested` is cancelled and turned into `hide()`); only Quit exits. In `tauri dev`, closing the window therefore leaves the process running in the tray: use Quit or Ctrl+C.
+- **Single instance (`tauri-plugin-single-instance`, registered first):** starting a second copy shows and focuses the first window and exits, so two processes never share the SQLite file.
+- **New-day refresh:** the store's `today` is only assigned when tasks load, so a long-running app must move it. `useDayWatcher` (called from `App`) calls `refreshDay()` every 30 s and on window focus and visibility. `refreshDay()` does nothing while the real day equals `today`; otherwise it waits for `startup()`, then runs the startup sequence again in the same order (`loadTasks`, which sets `today`; `sweepOverdue`; `loadProgress`; `remindIfDue`). It stops after `loadTasks` if the day did not move (the reload failed), so it never sweeps or reminds from stale data, and it tries again at the next check. Simultaneous calls share one run. Any difference between the real day and `today` counts, including a clock moved backwards.
+- **Reminder (`domain/reminders.ts`, `notification` plugin):** one system notification per day, sent when the app starts and on the first check of a new day: "3 tasks due today and 2 overdue." Due today and overdue are counted from the store's tasks after the sweep. Nothing is sent when both are 0, when the setting is off, or when one was already sent today. The day is saved only when the notification was really shown, so a denied or failed toast is retried at the next check instead of being lost. Settings keys: `reminders` (`"1"`/`"0"`, missing means on) and `lastReminderDay`.
+- **Settings:** a gear in the title bar opens a small popover with the reminder checkbox and a Test reminder button (which ignores the setting and the daily limit and saves nothing).
+- **Deferred:** autostart, window-state, global shortcut, the compact view, a reminder hour and repeat reminders.
 
 ## 5. Repository contracts
 
@@ -480,7 +498,7 @@ The Phase 0 and Phase 1 components were written by the agent before this split a
 | 4 | Gamification engine | `rewards`, `levels`, `streak` with Vitest tests; `rewardRepo`; ledger write inside `complete` | XP bar, level badge, coin and streak tiles | Tests pass; completing a task moves the XP bar |
 | 5 | Character | `moodFor`, `stageForLevel`, overdue sweep, one-shot queue in the store | `PixelSprite`, four stage bodies, four faces, state machine, animations | Completing a task plays `celebrate`; an overdue task shows `sad`; level 5 evolves |
 | 6 | Shop | `shopRepo`, `canPurchase`, seed items migration, purchase and equip actions | ShopPanel, accessory sprites, anchors | A bought item (glasses, laptop) persists after restart and fits every stage of both pets |
-| 7 | Widget behaviour | Tray, autostart, notification, window-state and global-shortcut plugins; date-change timer | CompactView, tray-friendly layouts | The app lives in the tray and reminds of tasks due today |
+| 7 | Widget behaviour | Tray, close-to-tray, single-instance and notification plugins; date-change refresh; daily reminder; settings popover. Autostart, window-state, global shortcut and CompactView moved to Phase 9. | SettingsMenu styling | The app lives in the tray and reminds of tasks due today |
 | 8 | Package | Icons, NSIS bundle config, JSON backup/export | Final visual polish pass | Installs from one `.exe` on another machine |
 | 9 | Stretch | Recurring tasks, weekly stats queries | Stats chart, themes, more accessories | Open |
 
