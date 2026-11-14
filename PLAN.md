@@ -60,7 +60,7 @@ tasks-organizor/
 │  ├─ index.css                    # @import "tailwindcss"; theme tokens
 │  ├─ components/                  # AGENT
 │  │  ├─ layout/                   # TitleBar, Panel, CompactView
-│  │  ├─ calendar/                 # CalendarPanel (react-day-picker)
+│  │  ├─ calendar/                 # CalendarPanel (react-day-picker), dateAdapters.ts (the only Date <-> ISODate conversion)
 │  │  ├─ tasks/                    # TaskPanel, TaskRow, QuickAdd
 │  │  ├─ shop/                     # ShopPanel, ItemCard
 │  │  └─ character/
@@ -76,6 +76,7 @@ tasks-organizor/
 │  │  ├─ types.ts
 │  │  ├─ config.ts                 # every tunable number lives here
 │  │  ├─ dates.ts                  # ISODate helpers
+│  │  ├─ tasks.ts                  # tasksInRange, anyTaskOn
 │  │  ├─ rewards.ts                # rewardFor
 │  │  ├─ levels.ts                 # levelFromXp, xpForLevel, stageForLevel
 │  │  ├─ streak.ts                 # streakFrom
@@ -88,7 +89,9 @@ tasks-organizor/
 │  │  ├─ rewardRepo.ts
 │  │  └─ shopRepo.ts
 │  └─ store/                       # ANDREI
-│     └─ useAppStore.ts
+│     ├─ useAppStore.ts
+│     ├─ selectors.ts              # useVisibleTasks, useHasTaskOn (derive with useMemo, stable slices only)
+│     └─ __tests__/
 └─ src-tauri/                      # ANDREI
    ├─ Cargo.toml
    ├─ tauri.conf.json
@@ -162,7 +165,7 @@ Notes on the schema:
 | --- | --- |
 | Tasks on a day or range | `WHERE start_date <= :to AND end_date >= :from AND status != 'archived'` |
 | Totals | `SELECT COALESCE(SUM(xp),0) AS xp, COALESCE(SUM(coins),0) AS coins FROM reward_events` |
-| Active days for streak | `SELECT DISTINCT day FROM reward_events WHERE reason = 'task_done' AND day > :lastResetDay ORDER BY day DESC` |
+| Active days for streak | `SELECT DISTINCT day FROM reward_events WHERE reason = 'task_done' AND id > COALESCE((SELECT MAX(id) FROM reward_events WHERE reason = 'streak_reset'), 0) ORDER BY day DESC` (cut by ledger order, not by day, so a task completed on the same day as a reset still counts) |
 | Newly overdue | `WHERE status = 'active' AND end_date < :today AND overdue_flagged = 0` |
 
 ## 4. Domain layer
@@ -198,6 +201,9 @@ export interface NewTask {
   difficulty: Difficulty;
 }
 
+/** Days picked in the calendar, inclusive; from <= to, a single day has from === to. */
+export interface DateSelection { from: ISODate; to: ISODate; }
+
 export interface Reward { xp: number; coins: number; }
 export interface Totals { xp: number; coins: number; }
 
@@ -219,8 +225,14 @@ export type Equipped = Record<Slot, string | null>;   // slot -> assetKey
 ```ts
 // dates.ts
 toISODate(d: Date): ISODate                       // from LOCAL fields, never toISOString()
-addDays(day: ISODate, n: number): ISODate
-isBetween(day: ISODate, from: ISODate, to: ISODate): boolean
+addDays(day: ISODate, n: number): ISODate         // calendar arithmetic via date-fns; DST-safe
+isBetween(day: ISODate, from: ISODate, to: ISODate): boolean          // inclusive
+rangesOverlap(aFrom: ISODate, aTo: ISODate, bFrom: ISODate, bTo: ISODate): boolean   // inclusive
+formatDayRange(from: ISODate, to: ISODate): string                    // "16 Nov", "16 – 18 Nov"
+
+// tasks.ts
+tasksInRange(tasks: Task[], from: ISODate, to: ISODate): Task[]       // tasks overlapping the range
+anyTaskOn(tasks: Task[], day: ISODate): boolean                       // drives the calendar dots
 
 // rewards.ts
 rewardFor(difficulty: Difficulty, streakDays: number): Reward
@@ -254,7 +266,7 @@ canPurchase(item: Item, coins: number, level: number, owned: boolean):
 | Streak bonus | +10% XP per streak day, capped at +50%. Coins get no bonus. |
 | XP for next level | `round(100 * level^1.5)` |
 | Evolution stages | Stage 1 at level 1, stage 2 at level 5, stage 3 at level 10, stage 4 at level 25 |
-| Streak | Consecutive local days with at least one `task_done`, counted back from today or yesterday, stopping at the last `streak_reset` |
+| Streak | Consecutive local days with at least one `task_done`, counted back from today or yesterday, counting only `task_done` rows added after the last `streak_reset` (ledger order). The streak shown in the UI includes today; the XP bonus uses the streak before today, so every task completed on the same day gets the same bonus. |
 | Sleepy hour | 22 |
 
 ### Mood priority
