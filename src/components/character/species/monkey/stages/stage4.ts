@@ -1,0 +1,38 @@
+import type { Grid } from "../../types";
+
+// Capuchin, stage 4: big frame with a centre crest tuft.
+// 32 rows of 32 palette keys ('.' is transparent). The face is a separate layer (faces/).
+export const STAGE_4_BODY: Grid = [
+  "............oooooooo............",
+  "..........ooddddddddoo..........",
+  ".......oooddddddddddddooo.......",
+  ".....oododdddddddddddddodoo.....",
+  ".....odsoddddddddddddddosdo.....",
+  "....odsodddsddddddddsdddosdo....",
+  "....odsoddssssddddssssddosdo....",
+  "....oddoddssssssssssssddoddo....",
+  ".....ododssssssssssssssdodo.....",
+  "......oodsssssttttsssssdoo......",
+  "........odsssttttttsssdo........",
+  "........odsssttttttsssdo........",
+  "......oooodssttttttssdoooo......",
+  ".....ooffoodssssssssdooffoo.....",
+  ".....offfofooossssooofofffo.....",
+  "...oooffffofccooooccfoffffo.....",
+  "..oocoffffofccccccccfoffffo.....",
+  ".odccoffffofccccccccfoffffo.....",
+  "oddccoffffoccccccccccoffffo.....",
+  "odddooffffofccccccccfoffffo.....",
+  "odddooffffofccccccccfoffffo.....",
+  "odddooffffofccccccccfoffffo.....",
+  "odddoofcfofffccccccfffofcfo.....",
+  "odddooccccffffccccffffcccco.....",
+  "oddddcccccoffffffffffoccccc.....",
+  ".oddddcccoooffffffffoooccc......",
+  ".oodddddodddoooffooodddo........",
+  "..oodddodddddddoodddddddo.......",
+  "....oooooddddddooddddddo........",
+  "........oodddoo..oodddoo........",
+  "..........ooo......ooo..........",
+  "................................",
+];
