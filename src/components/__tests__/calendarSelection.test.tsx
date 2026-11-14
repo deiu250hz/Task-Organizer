@@ -1,10 +1,8 @@
-import type { ReactElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Task } from "../../domain/types";
-import { useAppStore } from "../../store/useAppStore";
 import { CalendarPanel } from "../calendar/CalendarPanel";
 import { TaskPanel } from "../tasks/TaskPanel";
+import { renderWith } from "./renderWithStore";
 
 // The phase's done check, at render level: a task on 16-18 Nov shows on all three days.
 const labReport: Task = {
@@ -18,23 +16,6 @@ const labReport: Task = {
   overdueFlagged: false,
   completedOn: null,
 };
-
-type StoreState = ReturnType<typeof useAppStore.getState>;
-
-// Server rendering (renderToStaticMarkup) reads Zustand's INITIAL snapshot and ignores later
-// setState calls, so the state to render is written into that snapshot for one render and
-// then restored. Actions are covered by store/__tests__/selection.test.ts; here we only
-// check what the components draw for a given state.
-function renderWith(partial: Partial<StoreState>, ui: ReactElement): string {
-  const initial = useAppStore.getInitialState();
-  const saved = { ...initial };
-  Object.assign(initial, { tasks: [], selection: null, today: "2026-11-14", error: null }, partial);
-  try {
-    return renderToStaticMarkup(ui);
-  } finally {
-    Object.assign(initial, saved);
-  }
-}
 
 // react-day-picker renders each day as <td class="..." data-day="YYYY-MM-DD">.
 function dayCellClasses(html: string, day: string): string {
