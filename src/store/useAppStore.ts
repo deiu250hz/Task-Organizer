@@ -4,7 +4,7 @@ import { levelFromXp, stageForLevel } from "../domain/levels";
 import { oneShotsFor } from "../domain/oneShots";
 import { rewardFor } from "../domain/rewards";
 import { streakFrom } from "../domain/streak";
-import { newlyOverdue } from "../domain/tasks";
+import { canStartOn, newlyOverdue } from "../domain/tasks";
 import type {
   DateSelection,
   ISODate,
@@ -151,15 +151,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
       set({ error: "Title is required" });
       return false;
     }
+    // The past is read-only for adding, so no task can be created already overdue.
+    if (!canStartOn(input.startDate, get().today)) {
+      set({ error: "Tasks can only start today or later" });
+      return false;
+    }
     try {
-      let saved = await taskRepo.create({ ...input, title });
-      // A task created already past its end date is only being logged late, not missed, so it is
-      // flagged right away without resetting the streak. It still counts as overdue for the mood.
-      if (saved.endDate < get().today) {
-        await taskRepo.markFlagged([saved.id]);
-        saved = { ...saved, overdueFlagged: true };
-      }
-      const created = saved;
+      const created = await taskRepo.create({ ...input, title });
       // New array, never push: React and Zustand detect changes by reference.
       set((state) => ({ tasks: [...state.tasks, created], error: null }));
       return true;

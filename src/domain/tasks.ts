@@ -11,6 +11,12 @@ export function anyTaskOn(tasks: Task[], day: ISODate): boolean {
   return tasks.some((task) => isBetween(day, task.startDate, task.endDate));
 }
 
+// A new task may start today or later. The past is read-only for adding: it only lets you finish
+// tasks that are already overdue. 'YYYY-MM-DD' strings compare like dates.
+export function canStartOn(startDate: ISODate, today: ISODate): boolean {
+  return startDate >= today;
+}
+
 // An active task whose last day is already behind us. Overdue never removes XP or coins.
 export function countOverdue(tasks: Task[], today: ISODate): number {
   return tasks.filter((task) => task.status === "active" && task.endDate < today).length;

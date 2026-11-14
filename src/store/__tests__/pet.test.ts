@@ -11,7 +11,6 @@ vi.mock("../../repositories/taskRepo", () => ({
     create: vi.fn(),
     complete: vi.fn(),
     flagOverdue: vi.fn(),
-    markFlagged: vi.fn(),
   },
 }));
 vi.mock("../../repositories/rewardRepo", () => ({
@@ -41,7 +40,6 @@ function makeTask(id: number, endDate: string, extra: Partial<Task> = {}, diffic
 }
 
 const flagOverdue = vi.mocked(taskRepo.flagOverdue);
-const markFlagged = vi.mocked(taskRepo.markFlagged);
 const create = vi.mocked(taskRepo.create);
 const complete = vi.mocked(taskRepo.complete);
 const totals = vi.mocked(rewardRepo.totals);
@@ -52,7 +50,6 @@ beforeEach(() => {
   vi.resetAllMocks();
   complete.mockResolvedValue(undefined);
   flagOverdue.mockResolvedValue(undefined);
-  markFlagged.mockResolvedValue(undefined);
   totals.mockResolvedValue({ xp: 0, coins: 0 });
   activeDays.mockResolvedValue([]);
   lastCompletion.mockResolvedValue(null);
@@ -112,22 +109,42 @@ describe("sweepOverdue", () => {
   });
 });
 
-describe("addTask with a past end date", () => {
-  const input = { title: "Late log", startDate: "2026-11-10", endDate: "2026-11-12", difficulty: 1 as const };
+describe("addTask: the past is read-only", () => {
+  const input = { title: "New task", startDate: TODAY, endDate: TODAY, difficulty: 1 as const };
 
-  it("flags it right away without resetting the streak", async () => {
-    create.mockResolvedValue(makeTask(7, "2026-11-12"));
-    await useAppStore.getState().addTask(input);
-    expect(markFlagged).toHaveBeenCalledWith([7]);
-    expect(flagOverdue).not.toHaveBeenCalled();
-    expect(useAppStore.getState().tasks[0].overdueFlagged).toBe(true);
+  it("rejects a task that starts before today and does not touch the database", async () => {
+    const ok = await useAppStore.getState().addTask({ ...input, startDate: "2026-11-13", endDate: "2026-11-13" });
+    expect(ok).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+    expect(useAppStore.getState().error).toBe("Tasks can only start today or later");
+    expect(useAppStore.getState().tasks).toEqual([]);
   });
 
-  it("leaves a task ending today or later alone", async () => {
+  it("rejects a range that starts in the past even if it ends in the future", async () => {
+    const ok = await useAppStore.getState().addTask({ ...input, startDate: "2026-11-13", endDate: "2026-11-16" });
+    expect(ok).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a task that starts today", async () => {
     create.mockResolvedValue(makeTask(8, TODAY));
-    await useAppStore.getState().addTask({ ...input, endDate: TODAY });
-    expect(markFlagged).not.toHaveBeenCalled();
-    expect(useAppStore.getState().tasks[0].overdueFlagged).toBe(false);
+    const ok = await useAppStore.getState().addTask(input);
+    expect(ok).toBe(true);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().tasks).toHaveLength(1);
+  });
+
+  it("accepts a task that starts in the future", async () => {
+    create.mockResolvedValue(makeTask(9, "2026-11-20"));
+    const ok = await useAppStore.getState().addTask({ ...input, startDate: "2026-11-20", endDate: "2026-11-22" });
+    expect(ok).toBe(true);
+  });
+
+  it("still lets you complete a task from a previous day", async () => {
+    useAppStore.setState({ tasks: [makeTask(1, "2026-11-12")] });
+    await useAppStore.getState().completeTask(1);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().tasks[0].status).toBe("done");
   });
 });
 

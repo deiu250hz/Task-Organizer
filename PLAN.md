@@ -297,7 +297,9 @@ Runs on app start (`startup()`: load tasks, sweep, load progress; memoized so St
 2. If any exist: insert one `streak_reset` event for `today`, then set `overdue_flagged = 1` on those tasks. In this order so a retry is safe: a duplicate reset leaves the streak unchanged because the streak is cut at the last reset.
 3. Reload totals, streak and mood.
 
-A task created already past its end date (for example logged for yesterday) is only being recorded late, not missed: it is flagged at creation without a reset. It still counts in `overdueCount`, so the pet is sad until something is completed.
+No task is ever created already overdue: **a new task must start today or later** (`canStartOn`, enforced in the store and shown in `QuickAdd`). The past is read-only for adding; past days in the calendar still show their tasks and let you complete the overdue ones. Any active task can be completed, including future ones.
+
+Note on the mood: `sad` needs an overdue task AND nothing completed today. Completing something today (or within the last hour) makes the pet happy even while an older task is still overdue.
 
 Each task resets the streak once. A task that stays overdue for a week does not reset it seven times, but it keeps `overdueCount > 0`, so the monkey turns `sad` again each morning until something is completed that day.
 
@@ -318,8 +320,6 @@ export interface TaskRepo {
   archive(id: number): Promise<void>;
   /** Inserts one streak_reset for today, THEN flags the tasks. Retry-safe (see repository rules). */
   flagOverdue(ids: number[], today: ISODate): Promise<void>;
-  /** Flags tasks without a reset: a task created already past its end date is not a missed deadline. */
-  markFlagged(ids: number[]): Promise<void>;
 }
 
 // repositories/rewardRepo.ts

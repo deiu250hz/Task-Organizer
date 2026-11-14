@@ -16,8 +16,6 @@ export interface TaskRepo {
   complete(id: number, reward: Reward, today: ISODate): Promise<void>;
   /** The streak resets once for these tasks, then they are flagged. Safe to retry; see the comment on flagOverdue. */
   flagOverdue(ids: number[], today: ISODate): Promise<void>;
-  /** Flags tasks without resetting the streak (a task created already past its end date is not a missed deadline). */
-  markFlagged(ids: number[]): Promise<void>;
 }
 
 // A row exactly as SQLite returns it: snake_case, 0/1 for booleans, plain strings for dates.
@@ -122,12 +120,6 @@ function placeholders(count: number): string {
   return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(", ");
 }
 
-async function markFlagged(ids: number[]): Promise<void> {
-  if (ids.length === 0) return;
-  const db = await getDb();
-  await db.execute(`UPDATE tasks SET overdue_flagged = 1 WHERE id IN (${placeholders(ids.length)})`, ids);
-}
-
 /*
  * Same idea as complete: two writes, ordered so a retry is safe.
  *   1. insert one streak_reset event for today;
@@ -144,7 +136,7 @@ async function flagOverdue(ids: number[], today: ISODate): Promise<void> {
      VALUES (NULL, 0, 0, 'streak_reset', $1, $2)`,
     [today, new Date().toISOString()],
   );
-  await markFlagged(ids);
+  await db.execute(`UPDATE tasks SET overdue_flagged = 1 WHERE id IN (${placeholders(ids.length)})`, ids);
 }
 
-export const taskRepo: TaskRepo = { listInRange, create, complete, flagOverdue, markFlagged };
+export const taskRepo: TaskRepo = { listInRange, create, complete, flagOverdue };

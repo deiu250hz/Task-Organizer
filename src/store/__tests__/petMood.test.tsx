@@ -68,7 +68,7 @@ describe("usePetMood", () => {
     expect(moodAt(23, 0, { tasks: [task(1, TODAY)] })).toBe("sleepy");
   });
 
-  it("counts a backdated task that was already flagged as overdue for the mood", () => {
+  it("still counts an overdue task that was already flagged for the mood", () => {
     expect(moodAt(15, 0, { tasks: [task(1, "2026-11-12", { overdueFlagged: true })] })).toBe("sad");
   });
 });
