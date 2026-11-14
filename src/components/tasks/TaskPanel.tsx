@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { Panel } from "../layout/Panel";
 import { TaskRow } from "./TaskRow";
 import { QuickAdd } from "./QuickAdd";
+import { useVisibleTasks } from "../../store/selectors";
 import { useAppStore } from "../../store/useAppStore";
+import { formatDayRange } from "../../domain/dates";
 import type { Task } from "../../domain/types";
 
 interface TaskGroupProps {
@@ -30,11 +32,14 @@ function TaskGroup({ heading, tasks, onComplete }: TaskGroupProps) {
 
 export function TaskPanel() {
   // Select stable slices only. A selector that builds a new array (e.g. s.tasks.filter(...))
-  // returns a different value every call and makes Zustand 5 loop forever.
-  const tasks = useAppStore((s) => s.tasks);
+  // returns a different value every call and makes Zustand 5 loop forever. The filtered list
+  // comes from a hook that derives it with useMemo (see store/selectors.ts).
+  const tasks = useVisibleTasks();
+  const selection = useAppStore((s) => s.selection);
   const error = useAppStore((s) => s.error);
   const loadTasks = useAppStore((s) => s.loadTasks);
   const completeTask = useAppStore((s) => s.completeTask);
+  const clearSelection = useAppStore((s) => s.clearSelection);
 
   // Load once on startup. Action functions keep the same identity, so this does not re-run.
   useEffect(() => {
@@ -58,8 +63,30 @@ export function TaskPanel() {
         </p>
       )}
 
+      {selection !== null && (
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-md bg-surface-raised px-3 py-2 text-sm">
+          <span className="text-text-muted">
+            Showing{" "}
+            <span className="font-semibold text-text">
+              {formatDayRange(selection.from, selection.to)}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="rounded-md px-2 py-1 text-accent transition-colors hover:bg-surface"
+          >
+            Show all
+          </button>
+        </div>
+      )}
+
       {tasks.length === 0 && (
-        <p className="text-sm text-text-muted">No tasks yet. Add one above.</p>
+        <p className="text-sm text-text-muted">
+          {selection === null
+            ? "No tasks yet. Add one above."
+            : "No tasks for this selection."}
+        </p>
       )}
 
       <TaskGroup heading="Active" tasks={active} onComplete={completeTask} />

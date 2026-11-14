@@ -1,16 +1,5 @@
-// Fake data for panels not wired to the store yet: the calendar (Phase 3) and the
-// monkey panel (Phases 4-5). Tasks no longer use mock data. Delete this file when both are wired.
-
-// November 2026: the 1st is a Sunday, so a Monday-first grid has 6 leading blanks.
-export const MOCK_MONTH = {
-  label: "November 2026",
-  daysInMonth: 30,
-  leadingBlanks: 6,
-  today: 13,
-  rangeStart: 16,
-  rangeEnd: 18,
-  daysWithTasks: [12, 13, 16, 17, 18, 20, 24],
-};
+// Fake data for the monkey panel, which is not wired to the store yet (Phases 4-5).
+// Tasks and the calendar no longer use mock data. Delete this file when the monkey panel is wired.
 
 export const MOCK_PLAYER = {
   level: 3,
