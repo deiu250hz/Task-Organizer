@@ -1,4 +1,13 @@
 import { create } from "zustand";
+import {
+  backupFileName,
+  buildBackup,
+  describeBackup,
+  parseBackup,
+  safetyCopyFileName,
+  type BackupFile,
+  type BackupSummary,
+} from "../domain/backup";
 import { toISODate } from "../domain/dates";
 import { levelFromXp, stageForLevel } from "../domain/levels";
 import { oneShotsFor } from "../domain/oneShots";
@@ -19,7 +28,9 @@ import type {
   Task,
   Totals,
 } from "../domain/types";
+import { files } from "../platform/files";
 import { notifier } from "../platform/notifier";
+import { backupRepo } from "../repositories/backupRepo";
 import { rewardRepo } from "../repositories/rewardRepo";
 import { settingsRepo } from "../repositories/settingsRepo";
 import { shopRepo } from "../repositories/shopRepo";
@@ -48,9 +59,25 @@ let startupPromise: Promise<void> | null = null;
 // refresh runs, every caller gets that same promise, so the work happens once.
 let refreshPromise: Promise<void> | null = null;
 
+// True while an export or import runs. A second click on any backup button does nothing until it ends.
+let backupBusy = false;
+
 // Items being bought right now. A second click on the same Buy button is ignored until the first
 // purchase finishes (the SQL guards already prevent a double charge; this also stops a double animation).
 const purchasesInFlight = new Set<number>();
+
+/** A backup file that was read and found valid, waiting for the player to confirm replacing the current data. */
+export interface PendingImport {
+  fileName: string;
+  summary: BackupSummary;
+  backup: BackupFile;
+}
+
+/** What a backup action tells the settings popover. Cancelling a dialog is not an error. */
+export type BackupResult =
+  | { kind: "done"; message: string }
+  | { kind: "cancelled" }
+  | { kind: "error"; message: string };
 
 interface AppState {
   tasks: Task[];
@@ -76,6 +103,8 @@ interface AppState {
   remindersEnabled: boolean;
   /** The day a reminder was last sent, or null. Saved in settings. */
   lastReminderDay: ISODate | null;
+  /** A valid backup waiting for the player's confirmation, or null. */
+  pendingImport: PendingImport | null;
   /** Everything the shop sells. Static data, loaded once at startup. */
   items: Item[];
   /** What the player has bought and whether it is worn. */
@@ -98,6 +127,14 @@ interface AppState {
   sendTestReminder(): Promise<boolean>;
   /** When the real day is no longer `today`: reload, sweep overdue, reload progress, remind. Does nothing otherwise. */
   refreshDay(): Promise<void>;
+  /** Writes every table to a JSON file the player picks. */
+  exportBackup(): Promise<BackupResult>;
+  /** Asks for a file, validates all of it, and keeps it as `pendingImport`. Changes no data. */
+  prepareImport(): Promise<BackupResult>;
+  /** Forgets the pending import without changing anything. */
+  cancelImport(): void;
+  /** Saves a safety copy of the current data, replaces everything with the pending backup, then reloads the app state. */
+  confirmImport(): Promise<BackupResult>;
   /** Saves the choice, then updates the state. Level, XP and coins carry over: the pet is only a skin. */
   chooseSpecies(species: Species): Promise<void>;
   /** Tasks that became overdue reset the streak once each, then get flagged. */
@@ -138,6 +175,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   settingsLoaded: false,
   remindersEnabled: true,
   lastReminderDay: null,
+  pendingImport: null,
   items: [],
   owned: [],
   error: null,
@@ -256,6 +294,83 @@ export const useAppStore = create<AppState>()((set, get) => ({
       }
     })();
     return refreshPromise;
+  },
+
+  exportBackup: async () => {
+    if (backupBusy) return { kind: "cancelled" };
+    backupBusy = true;
+    try {
+      const data = await backupRepo.readAll();
+      const file = buildBackup(data, new Date().toISOString()); // the store reads the clock, the domain gets it as a parameter
+      const path = await files.saveBackupFile(backupFileName(get().today), JSON.stringify(file, null, 2));
+      return path === null ? { kind: "cancelled" } : { kind: "done", message: `Backup saved to ${path}` };
+    } catch (error) {
+      return { kind: "error", message: messageOf(error) };
+    } finally {
+      backupBusy = false;
+    }
+  },
+
+  prepareImport: async () => {
+    if (backupBusy) return { kind: "cancelled" };
+    backupBusy = true;
+    try {
+      const picked = await files.pickBackupFile();
+      if (picked === null) return { kind: "cancelled" };
+      // The catalogue of shop items lives in the database (seeded by migrations); the file is checked against it.
+      const items = await shopRepo.listItems();
+      const result = parseBackup(picked.text, items.map((item) => item.id));
+      if (!result.ok) {
+        set({ pendingImport: null });
+        return { kind: "error", message: `${picked.name}: ${result.reason}` };
+      }
+      set({ pendingImport: { fileName: picked.name, summary: describeBackup(result.backup), backup: result.backup } });
+      return { kind: "done", message: `Ready to import ${picked.name}.` };
+    } catch (error) {
+      return { kind: "error", message: messageOf(error) };
+    } finally {
+      backupBusy = false;
+    }
+  },
+
+  cancelImport: () => set({ pendingImport: null }),
+
+  confirmImport: async () => {
+    const pending = get().pendingImport;
+    if (pending === null || backupBusy) return { kind: "cancelled" };
+    backupBusy = true;
+    let safetyPath: string | null = null;
+    try {
+      // 1. A copy of what is there now. If it cannot be written the import does not start.
+      const now = new Date().toISOString();
+      const current = buildBackup(await backupRepo.readAll(), now);
+      safetyPath = await files.writeSafetyCopy(safetyCopyFileName(now), JSON.stringify(current, null, 2));
+      // 2. Replace everything. Repeatable: running it again after a failure ends in the same state.
+      await backupRepo.replaceAll(pending.backup);
+      set({ pendingImport: null });
+      return { kind: "done", message: `Backup imported. Your previous data is saved at ${safetyPath}` };
+    } catch (error) {
+      const reason = messageOf(error);
+      return {
+        kind: "error",
+        message:
+          safetyPath === null
+            ? reason // nothing was changed
+            : `${reason} Your previous data is saved at ${safetyPath}. Importing the same file again is safe.`,
+      };
+    } finally {
+      if (safetyPath !== null) {
+        // The database may have changed (fully or partly), so show what is really there: the same
+        // loads as startup, in the same order. Selection and queued animations belonged to the old data.
+        set({ selection: null, oneShots: [] });
+        await get().loadSettings();
+        await get().loadTasks();
+        await get().loadShop();
+        await get().sweepOverdue(); // restored tasks that are overdue reset the streak once, as at startup
+        await get().loadProgress();
+      }
+      backupBusy = false;
+    }
   },
 
   sweepOverdue: async () => {

@@ -51,7 +51,7 @@ export function DeleteControl({ taskTitle, confirming, onAsk, onConfirm, onCance
         // Focus lands on the safe choice, so a stray Enter or Space cancels instead of deleting.
         autoFocus
         onClick={onCancel}
-        className="rounded-md border border-border px-2 py-1 text-xs text-text transition-colors hover:border-accent"
+        className="rounded-md border border-border-strong px-2 py-1 text-xs text-text transition-colors hover:border-accent"
       >
         No
       </button>
