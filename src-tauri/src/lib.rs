@@ -22,6 +22,12 @@ pub fn run() {
             sql: include_str!("../migrations/002_settings.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "shop_items_and_purchase_link",
+            sql: include_str!("../migrations/003_shop.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
