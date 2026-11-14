@@ -34,6 +34,14 @@ export interface DateSelection {
   to: ISODate;
 }
 
+/** A one-shot animation waiting its turn. The queue plays them in order, one at a time. */
+export interface QueuedOneShot {
+  id: number;
+  kind: OneShot;
+  /** Only for "evolve": the stage the pet becomes when it ends. */
+  toStage?: Stage;
+}
+
 export interface Reward {
   xp: number;
   coins: number;
