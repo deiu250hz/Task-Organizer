@@ -17,6 +17,12 @@ export function canStartOn(startDate: ISODate, today: ISODate): boolean {
   return startDate >= today;
 }
 
+// Only active tasks can be deleted. A done task is history: its XP is already in the ledger and
+// the pet's mood counts it, so removing it would change both for no clear reason.
+export function canDelete(task: Task): boolean {
+  return task.status === "active";
+}
+
 // An active task whose last day is already behind us. Overdue never removes XP or coins.
 export function countOverdue(tasks: Task[], today: ISODate): number {
   return tasks.filter((task) => task.status === "active" && task.endDate < today).length;

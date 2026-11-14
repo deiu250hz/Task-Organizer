@@ -16,6 +16,8 @@ export interface TaskRepo {
   complete(id: number, reward: Reward, today: ISODate): Promise<void>;
   /** The streak resets once for these tasks, then they are flagged. Safe to retry; see the comment on flagOverdue. */
   flagOverdue(ids: number[], today: ISODate): Promise<void>;
+  /** Soft delete: hides an ACTIVE task. Never touches the ledger, so earned XP and coins stay. Safe to repeat. */
+  archive(id: number): Promise<void>;
 }
 
 // A row exactly as SQLite returns it: snake_case, 0/1 for booleans, plain strings for dates.
@@ -139,4 +141,11 @@ async function flagOverdue(ids: number[], today: ISODate): Promise<void> {
   await db.execute(`UPDATE tasks SET overdue_flagged = 1 WHERE id IN (${placeholders(ids.length)})`, ids);
 }
 
-export const taskRepo: TaskRepo = { listInRange, create, complete, flagOverdue };
+// The guard (AND status = 'active') makes this safe to repeat and impossible to apply to a done
+// task, even if a caller forgets to check. listInRange already hides archived tasks.
+async function archive(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(`UPDATE tasks SET status = 'archived' WHERE id = $1 AND status = 'active'`, [id]);
+}
+
+export const taskRepo: TaskRepo = { listInRange, create, complete, flagOverdue, archive };

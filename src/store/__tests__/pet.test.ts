@@ -11,6 +11,7 @@ vi.mock("../../repositories/taskRepo", () => ({
     create: vi.fn(),
     complete: vi.fn(),
     flagOverdue: vi.fn(),
+    archive: vi.fn(),
   },
 }));
 vi.mock("../../repositories/rewardRepo", () => ({

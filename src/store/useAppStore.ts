@@ -4,7 +4,7 @@ import { levelFromXp, stageForLevel } from "../domain/levels";
 import { oneShotsFor } from "../domain/oneShots";
 import { rewardFor } from "../domain/rewards";
 import { streakFrom } from "../domain/streak";
-import { canStartOn, newlyOverdue } from "../domain/tasks";
+import { canDelete, canStartOn, newlyOverdue } from "../domain/tasks";
 import type {
   DateSelection,
   ISODate,
@@ -59,6 +59,8 @@ interface AppState {
   /** Resolves true when the task was created, false when it was rejected or failed (see `error`). */
   addTask(input: NewTask): Promise<boolean>;
   completeTask(id: number): Promise<void>;
+  /** Archives an active task (soft delete). Done tasks cannot be deleted. XP and coins are never touched. */
+  deleteTask(id: number): Promise<void>;
   /** Called when the head animation finishes. Ignores ids that are not the head. */
   dequeueOneShot(id: number): void;
 }
@@ -201,6 +203,19 @@ export const useAppStore = create<AppState>()((set, get) => ({
         // loadProgress already moved the stage; put the old one back so the evolve can play.
         displayStage: shots.some((shot) => shot.kind === "evolve") ? displayStage : state.displayStage,
       }));
+    } catch (error) {
+      set({ error: messageOf(error) });
+    }
+  },
+
+  deleteTask: async (id) => {
+    const task = get().tasks.find((candidate) => candidate.id === id);
+    if (task === undefined || !canDelete(task)) return;
+    try {
+      await taskRepo.archive(id);
+      // Mood, overdue count, calendar dots and the visible list are all derived from tasks,
+      // so removing the task from this array updates all of them.
+      set((state) => ({ tasks: state.tasks.filter((candidate) => candidate.id !== id), error: null }));
     } catch (error) {
       set({ error: messageOf(error) });
     }
