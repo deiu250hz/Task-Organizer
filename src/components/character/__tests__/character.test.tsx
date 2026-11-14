@@ -120,6 +120,46 @@ describe("Character one-shots", () => {
   });
 });
 
+describe("Character with accessories", () => {
+  const glasses: Equipped = { ...noAccessories, glasses: "glasses_round" };
+  const laptop: Equipped = { ...noAccessories, held: "laptop" };
+
+  it("draws the glasses and the laptop in their own colours", () => {
+    expect(html({ equipped: glasses })).toContain('fill="#3a78c2"');
+    expect(html({ equipped: laptop })).toContain('fill="#1c1f2b"');
+    expect(html()).not.toContain('fill="#3a78c2"');
+    expect(html()).not.toContain('fill="#1c1f2b"');
+  });
+
+  it("draws different pixels for each item and for both together", () => {
+    const drawn = [noAccessories, glasses, laptop, { ...glasses, held: "laptop" }].map((equipped) => html({ equipped }));
+    expect(new Set(drawn).size).toBe(4);
+  });
+
+  it("still draws one sprite, since the items are layers of the same picture", () => {
+    expect(count(html({ equipped: { ...glasses, held: "laptop" } }), "<svg")).toBe(1);
+  });
+
+  it("fits every stage of both pets", () => {
+    for (const species of ["monkey", "cat"] as const) {
+      for (const stage of [1, 2, 3, 4] as Stage[]) {
+        expect(html({ species, stage, equipped: glasses })).toContain('fill="#3a78c2"');
+        expect(html({ species, stage, equipped: laptop })).toContain('fill="#1c1f2b"');
+      }
+    }
+  });
+
+  it("dresses both the old and the new stage during an evolve", () => {
+    const out = html({ equipped: glasses, oneShot: { id: 9, kind: "evolve", toStage: 2 } });
+    expect(count(out, "<svg")).toBe(2);
+    expect(count(out, 'fill="#3a78c2"')).toBeGreaterThanOrEqual(2);
+  });
+
+  it("ignores an unknown asset key instead of crashing", () => {
+    expect(html({ equipped: { ...noAccessories, hat: "top_hat_from_the_future" } })).toBe(html());
+  });
+});
+
 describe("Character boundaries", () => {
   it("imports nothing from store/ or repositories/ (CLAUDE.md rule 6)", () => {
     const imports = characterSource.split("\n").filter((line: string) => line.startsWith("import"));

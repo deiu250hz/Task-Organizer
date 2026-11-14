@@ -1,5 +1,7 @@
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import type { Equipped, Mood, OneShot, Stage } from "../../domain/types";
+import { accessoryLayers, ACCESSORY_PALETTE } from "./accessories";
+import { ANCHORS } from "./anchors";
 import { composeLayers } from "./composeLayers";
 import { ONE_SHOT_MS } from "./oneShotTiming";
 import { PixelSprite } from "./PixelSprite";
@@ -14,7 +16,7 @@ export interface CharacterProps {
   /** The stage on screen, 1..4. */
   stage: Stage;
   mood: Mood;
-  /** Accessories by slot. Drawn from Phase 6; accepted now so the prop is stable. */
+  /** Accessories by slot (an asset key, or null for an empty slot). Placed with the anchors of the stage being drawn. */
   equipped: Equipped;
   /** The animation playing now (head of the store's queue); null when nothing is pending. */
   oneShot: { id: number; kind: OneShot; toStage?: Stage } | null;
@@ -26,17 +28,26 @@ export interface CharacterProps {
 
 const DEFAULT_SIZE = 192;
 
-export function Character({ species, stage, mood, oneShot, onOneShotDone, size = DEFAULT_SIZE }: CharacterProps) {
+export function Character({ species, stage, mood, equipped, oneShot, onOneShotDone, size = DEFAULT_SIZE }: CharacterProps) {
   const art = SPECIES[species];
   const { shownMood, handleAnimationEnd } = useCharacterMachine({ mood, oneShot, onOneShotDone });
 
-  const spriteFor = (forStage: Stage) => (
-    <PixelSprite
-      grid={composeLayers([art.bodies[forStage], art.faces[shownMood][forStage]])}
-      palette={art.palette}
-      size={size}
-    />
-  );
+  // Pet keys are lowercase and accessory keys uppercase, so one merged palette serves every layer.
+  // Memoized so PixelSprite sees the same object between renders.
+  const palette = useMemo(() => ({ ...art.palette, ...ACCESSORY_PALETTE }), [art]);
+
+  // Layer order, back to front: background, body, face, held, glasses, hat. The anchors are looked up
+  // for the stage being drawn, so during an evolve each of the two sprites gets its own placement.
+  const spriteFor = (forStage: Stage) => {
+    const worn = accessoryLayers(equipped, ANCHORS[species][forStage]);
+    return (
+      <PixelSprite
+        grid={composeLayers([...worn.behind, art.bodies[forStage], art.faces[shownMood][forStage], ...worn.front])}
+        palette={palette}
+        size={size}
+      />
+    );
+  };
 
   // --px is one sprite pixel in screen pixels: animations move in whole sprite pixels, never between.
   // --shot-ms is the duration of the current one-shot. Both are CSS custom properties, which
