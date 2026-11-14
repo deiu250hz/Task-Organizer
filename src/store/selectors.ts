@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { levelFromXp } from "../domain/levels";
 import { moodFor } from "../domain/mood";
+import { equippedMap, shopEntries, type ShopEntry } from "../domain/shop";
 import {
   anyTaskOn,
   countActiveOn,
@@ -8,7 +9,7 @@ import {
   countOverdue,
   tasksInRange,
 } from "../domain/tasks";
-import type { ISODate, Mood, QueuedOneShot, Task } from "../domain/types";
+import type { Equipped, ISODate, Mood, QueuedOneShot, Task } from "../domain/types";
 import { useAppStore } from "./useAppStore";
 import { useNow } from "./useNow";
 
@@ -75,6 +76,24 @@ export function usePetMood(): Mood {
           lastCompletionAt === null ? null : (now - lastCompletionAt) / MS_PER_MINUTE,
       }),
     [tasks, today, lastCompletionAt, now],
+  );
+}
+
+/** The asset worn in each slot, derived from the shop items and the inventory. */
+export function useEquipped(): Equipped {
+  const items = useAppStore((s) => s.items);
+  const owned = useAppStore((s) => s.owned);
+  return useMemo(() => equippedMap(items, owned), [items, owned]);
+}
+
+/** One entry per shop item with the state its card should show (buy, locked, equip, unequip). */
+export function useShopEntries(): ShopEntry[] {
+  const items = useAppStore((s) => s.items);
+  const owned = useAppStore((s) => s.owned);
+  const totals = useAppStore((s) => s.totals);
+  return useMemo(
+    () => shopEntries(items, owned, totals.coins, levelFromXp(totals.xp).level),
+    [items, owned, totals],
   );
 }
 

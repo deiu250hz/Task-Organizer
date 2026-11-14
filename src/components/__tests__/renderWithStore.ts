@@ -24,6 +24,8 @@ export function renderWith(partial: Partial<StoreState>, ui: ReactElement): stri
       displayStage: 1,
       species: "monkey",
       settingsLoaded: true,
+      items: [],
+      owned: [],
       error: null,
     },
     partial,

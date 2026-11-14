@@ -3,13 +3,16 @@ import { toISODate } from "../domain/dates";
 import { levelFromXp, stageForLevel } from "../domain/levels";
 import { oneShotsFor } from "../domain/oneShots";
 import { rewardFor } from "../domain/rewards";
+import { canPurchase } from "../domain/shop";
 import { isSpecies, type Species } from "../domain/species";
 import { streakFrom } from "../domain/streak";
 import { canDelete, canStartOn, newlyOverdue } from "../domain/tasks";
 import type {
   DateSelection,
   ISODate,
+  Item,
   NewTask,
+  OwnedItem,
   QueuedOneShot,
   Stage,
   Task,
@@ -17,6 +20,7 @@ import type {
 } from "../domain/types";
 import { rewardRepo } from "../repositories/rewardRepo";
 import { settingsRepo } from "../repositories/settingsRepo";
+import { shopRepo } from "../repositories/shopRepo";
 import { taskRepo } from "../repositories/taskRepo";
 
 // The SQL plugin rejects with plain strings, so a caught value is not always an Error.
@@ -32,6 +36,10 @@ let nextOneShotId = 1;
 
 // startup() must run its steps once, even if React calls the effect twice (StrictMode in dev).
 let startupPromise: Promise<void> | null = null;
+
+// Items being bought right now. A second click on the same Buy button is ignored until the first
+// purchase finishes (the SQL guards already prevent a double charge; this also stops a double animation).
+const purchasesInFlight = new Set<number>();
 
 interface AppState {
   tasks: Task[];
@@ -53,6 +61,10 @@ interface AppState {
   species: Species | null;
   /** False until the saved choice has been read, so the picker does not flash for returning players. */
   settingsLoaded: boolean;
+  /** Everything the shop sells. Static data, loaded once at startup. */
+  items: Item[];
+  /** What the player has bought and whether it is worn. */
+  owned: OwnedItem[];
   error: string | null;
   selectDay(day: ISODate): void;
   /** Accepts the two ends in either order and stores them as from <= to. */
@@ -74,8 +86,20 @@ interface AppState {
   completeTask(id: number): Promise<void>;
   /** Archives an active task (soft delete). Done tasks cannot be deleted. XP and coins are never touched. */
   deleteTask(id: number): Promise<void>;
+  /** Reads the items and the inventory. Replaces both lists, so it is safe to call any number of times. */
+  loadShop(): Promise<void>;
+  /** Buys and wears the item. Resolves true only when the item is really owned afterwards (see `error` otherwise). */
+  purchaseItem(itemId: number): Promise<boolean>;
+  /** Wears an owned item (replacing the one in the same slot) or takes it off. Unowned ids are ignored. */
+  toggleEquip(itemId: number): Promise<void>;
   /** Called when the head animation finishes. Ignores ids that are not the head. */
   dequeueOneShot(id: number): void;
+}
+
+function refusalMessage(reason: "owned" | "level" | "coins", item: Item): string {
+  if (reason === "owned") return "You already own this item";
+  if (reason === "level") return `Reach level ${item.minLevel} to buy this`;
+  return "Not enough coins";
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
@@ -89,6 +113,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   displayStage: 1,
   species: null,
   settingsLoaded: false,
+  items: [],
+  owned: [],
   error: null,
 
   selectDay: (day) => set({ selection: { from: day, to: day } }),
@@ -102,7 +128,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   startup: () => {
     if (startupPromise === null) {
       startupPromise = (async () => {
-        await Promise.all([get().loadSettings(), get().loadTasks()]);
+        await Promise.all([get().loadSettings(), get().loadTasks(), get().loadShop()]);
         await get().sweepOverdue();
         await get().loadProgress();
       })();
@@ -251,6 +277,68 @@ export const useAppStore = create<AppState>()((set, get) => ({
       // Mood, overdue count, calendar dots and the visible list are all derived from tasks,
       // so removing the task from this array updates all of them.
       set((state) => ({ tasks: state.tasks.filter((candidate) => candidate.id !== id), error: null }));
+    } catch (error) {
+      set({ error: messageOf(error) });
+    }
+  },
+
+  loadShop: async () => {
+    try {
+      const [items, owned] = await Promise.all([shopRepo.listItems(), shopRepo.listOwned()]);
+      set({ items, owned, error: null });
+    } catch (error) {
+      set({ error: messageOf(error) });
+    }
+  },
+
+  purchaseItem: async (itemId) => {
+    if (purchasesInFlight.has(itemId)) return false;
+    const { items, owned, totals, today } = get();
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (item === undefined) {
+      set({ error: "Unknown item" });
+      return false;
+    }
+    const check = canPurchase(
+      item,
+      totals.coins,
+      levelFromXp(totals.xp).level,
+      owned.some((entry) => entry.itemId === itemId),
+    );
+    if (!check.ok) {
+      set({ error: refusalMessage(check.reason, item) });
+      return false;
+    }
+    purchasesInFlight.add(itemId);
+    try {
+      await shopRepo.purchase(item, today);
+      await shopRepo.setEquipped(item.id, true); // buying wears it, so the player sees the result at once
+      // Coins come from the ledger, so they are re-read rather than subtracted here.
+      await Promise.all([get().loadShop(), get().loadProgress()]);
+      // The guarded SQL may have refused (for example, coins changed under us). Trust the database.
+      if (!get().owned.some((entry) => entry.itemId === itemId)) {
+        set({ error: "The purchase did not go through" });
+        return false;
+      }
+      set((state) => ({ oneShots: [...state.oneShots, { id: nextOneShotId++, kind: "equip" }] }));
+      return true;
+    } catch (error) {
+      set({ error: messageOf(error) });
+      return false;
+    } finally {
+      purchasesInFlight.delete(itemId);
+    }
+  },
+
+  toggleEquip: async (itemId) => {
+    const entry = get().owned.find((candidate) => candidate.itemId === itemId);
+    if (entry === undefined) return; // not owned (or unknown): nothing to wear
+    const wear = !entry.equipped;
+    try {
+      await shopRepo.setEquipped(itemId, wear);
+      await get().loadShop();
+      // Taking an item off is silent; only wearing plays the little hop.
+      if (wear) set((state) => ({ oneShots: [...state.oneShots, { id: nextOneShotId++, kind: "equip" }] }));
     } catch (error) {
       set({ error: messageOf(error) });
     }
