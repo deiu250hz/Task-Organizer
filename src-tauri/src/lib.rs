@@ -75,6 +75,9 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        // Backups: the Save/Open dialogs, and reading/writing the file the user picked.
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // The tray lives in Rust: the menu, the icon and the clicks never touch the webview, so
             // none of this needs a capability entry.

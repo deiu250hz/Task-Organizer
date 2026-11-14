@@ -14,6 +14,13 @@
     "core:window:allow-close",
     "sql:default",
     "sql:allow-execute",
-    "notification:default"
+    "notification:default",
+    "dialog:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$APPDATA/backups" }, { "path": "$APPDATA/backups/**" }]
+    }
   ]
 }
