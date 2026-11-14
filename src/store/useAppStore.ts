@@ -3,6 +3,7 @@ import { toISODate } from "../domain/dates";
 import { levelFromXp, stageForLevel } from "../domain/levels";
 import { oneShotsFor } from "../domain/oneShots";
 import { rewardFor } from "../domain/rewards";
+import { isSpecies, type Species } from "../domain/species";
 import { streakFrom } from "../domain/streak";
 import { canDelete, canStartOn, newlyOverdue } from "../domain/tasks";
 import type {
@@ -15,12 +16,16 @@ import type {
   Totals,
 } from "../domain/types";
 import { rewardRepo } from "../repositories/rewardRepo";
+import { settingsRepo } from "../repositories/settingsRepo";
 import { taskRepo } from "../repositories/taskRepo";
 
 // The SQL plugin rejects with plain strings, so a caught value is not always an Error.
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+// The settings key under which the chosen pet is saved.
+const SPECIES_KEY = "species";
 
 // Ids only need to be unique while the app runs; the queue is never saved.
 let nextOneShotId = 1;
@@ -44,6 +49,10 @@ interface AppState {
   oneShots: QueuedOneShot[];
   /** The stage on screen. It lags behind the level while an "evolve" is still waiting in the queue. */
   displayStage: Stage;
+  /** The chosen pet. null means none was chosen yet (the first-run picker shows). */
+  species: Species | null;
+  /** False until the saved choice has been read, so the picker does not flash for returning players. */
+  settingsLoaded: boolean;
   error: string | null;
   selectDay(day: ISODate): void;
   /** Accepts the two ends in either order and stores them as from <= to. */
@@ -52,6 +61,10 @@ interface AppState {
   /** Loads tasks, flags newly overdue ones, then loads progress. Runs its steps once per app run. */
   startup(): Promise<void>;
   loadTasks(): Promise<void>;
+  /** Reads the saved pet. A missing or unknown value counts as not chosen. */
+  loadSettings(): Promise<void>;
+  /** Saves the choice, then updates the state. Level, XP and coins carry over: the pet is only a skin. */
+  chooseSpecies(species: Species): Promise<void>;
   /** Tasks that became overdue reset the streak once each, then get flagged. */
   sweepOverdue(): Promise<void>;
   /** Reads totals, the streak and the last completion time from the ledger. Safe to call any number of times. */
@@ -74,6 +87,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   lastCompletionAt: null,
   oneShots: [],
   displayStage: 1,
+  species: null,
+  settingsLoaded: false,
   error: null,
 
   selectDay: (day) => set({ selection: { from: day, to: day } }),
@@ -87,7 +102,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   startup: () => {
     if (startupPromise === null) {
       startupPromise = (async () => {
-        await get().loadTasks();
+        await Promise.all([get().loadSettings(), get().loadTasks()]);
         await get().sweepOverdue();
         await get().loadProgress();
       })();
@@ -103,6 +118,26 @@ export const useAppStore = create<AppState>()((set, get) => ({
       set({ tasks, today: toISODate(new Date()), error: null });
     } catch (error) {
       set({ error: messageOf(error) });
+    }
+  },
+
+  loadSettings: async () => {
+    try {
+      const saved = await settingsRepo.get(SPECIES_KEY);
+      set({ species: isSpecies(saved) ? saved : null, settingsLoaded: true });
+    } catch (error) {
+      // Still mark it loaded, so the picker can appear instead of an empty box.
+      set({ error: messageOf(error), settingsLoaded: true });
+    }
+  },
+
+  chooseSpecies: async (species) => {
+    if (get().species === species) return;
+    try {
+      await settingsRepo.set(SPECIES_KEY, species);
+      set({ species, error: null });
+    } catch (error) {
+      set({ error: messageOf(error) }); // keep the previous pet
     }
   },
 

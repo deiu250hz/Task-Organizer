@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../repositories/taskRepo", () => ({
   taskRepo: { listInRange: vi.fn(), create: vi.fn(), complete: vi.fn(), flagOverdue: vi.fn(), archive: vi.fn() },
 }));
+vi.mock("../../repositories/settingsRepo", () => ({
+  settingsRepo: { get: vi.fn(), set: vi.fn() },
+}));
 vi.mock("../../repositories/rewardRepo", () => ({
   rewardRepo: { totals: vi.fn(), activeDaysSinceLastReset: vi.fn(), completedCount: vi.fn(), lastCompletionAt: vi.fn() },
 }));
@@ -12,13 +15,15 @@ async function freshStore() {
   vi.resetModules();
   const { taskRepo } = await import("../../repositories/taskRepo");
   const { rewardRepo } = await import("../../repositories/rewardRepo");
+  const { settingsRepo } = await import("../../repositories/settingsRepo");
   const { useAppStore } = await import("../useAppStore");
   vi.mocked(taskRepo.listInRange).mockResolvedValue([]);
   vi.mocked(taskRepo.flagOverdue).mockResolvedValue(undefined);
   vi.mocked(rewardRepo.totals).mockResolvedValue({ xp: 0, coins: 0 });
   vi.mocked(rewardRepo.activeDaysSinceLastReset).mockResolvedValue([]);
   vi.mocked(rewardRepo.lastCompletionAt).mockResolvedValue(null);
-  return { taskRepo, rewardRepo, useAppStore };
+  vi.mocked(settingsRepo.get).mockResolvedValue(null);
+  return { taskRepo, rewardRepo, settingsRepo, useAppStore };
 }
 
 describe("startup", () => {
@@ -45,6 +50,15 @@ describe("startup", () => {
     expect(second).toBe(first);
     await Promise.all([first, second]);
     expect(taskRepo.listInRange).toHaveBeenCalledTimes(1);
+  });
+
+  it("also reads the saved pet, once", async () => {
+    const { settingsRepo, useAppStore } = await freshStore();
+    vi.mocked(settingsRepo.get).mockResolvedValue("cat");
+    await Promise.all([useAppStore.getState().startup(), useAppStore.getState().startup()]);
+    expect(settingsRepo.get).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().species).toBe("cat");
+    expect(useAppStore.getState().settingsLoaded).toBe(true);
   });
 
   it("does not flag anything when nothing is overdue", async () => {
