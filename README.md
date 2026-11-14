@@ -1,8 +1,8 @@
-# Tasks Organizor
+# Tasks Organizer
 
 A gamified desktop task manager for Windows. Plan tasks on a calendar, complete them to earn XP and coins, and watch a retro pixel-art pet level up, evolve and wear the accessories you buy.
 
-> **Status:** Phases 0 to 7 of 9 are done: the app is fully playable and lives in the system tray. Packaging into an installer (Phase 8) and the stretch goals (Phase 9) are still to do. See the [roadmap](#roadmap).
+> **Status:** version 1.0.0. Phases 0 to 8 of 9 are done: the app is fully playable, lives in the system tray, can back up and restore your data, and builds into a Windows installer. Only the stretch goals (Phase 9) are left. See the [roadmap](#roadmap).
 
 ## Features
 
@@ -16,15 +16,16 @@ A gamified desktop task manager for Windows. Plan tasks on a calendar, complete 
 - **Lives in the tray**: the close button hides the window to the system tray. Left-click the tray icon to show or hide it, right-click for Show and Quit. Starting a second copy brings the first one forward.
 - **Reminders**: one notification a day, when the app starts or a new day begins, that tells you how many tasks are due today and how many are overdue. It can be turned off in the settings (gear icon in the title bar).
 - **New-day aware**: left running for days, the app moves to the new day on its own: it flags tasks that just became overdue and refreshes the pet's mood.
+- **Backup and restore**: the settings (gear icon) menu exports everything (tasks, rewards, purchases, settings) to a JSON file and imports it again, on this PC or another. An import is checked completely before anything changes, asks you to confirm, and saves a safety copy of your current data first.
 - **Local only**: all data stays in one SQLite file on your machine.
 
-Not built yet: start with Windows, remembering the window size and position, a global shortcut, a compact always-on-top view, an installer, and more shop items (hats, backgrounds).
+Not built yet: start with Windows, remembering the window size and position, a global shortcut, a compact always-on-top view, code signing and auto-update for the installer, and more shop items (hats, backgrounds).
 
 ## Tech stack
 
 | Layer         | Technology                                                                         |
 | ------------- | ---------------------------------------------------------------------------------- |
-| Desktop shell | [Tauri 2](https://v2.tauri.app/) (Rust, WebView2), tray, notification, single-instance plugins |
+| Desktop shell | [Tauri 2](https://v2.tauri.app/) (Rust, WebView2), tray, notification, single-instance, dialog, fs plugins |
 | UI            | React, TypeScript, Vite                                                            |
 | Styling       | Tailwind CSS 4                                                                     |
 | State         | Zustand                                                                            |
@@ -68,6 +69,16 @@ npm run tauri dev
 
 The first build compiles the Rust side and takes a few minutes. Because the close button hides the window to the tray, stop the app with Quit in the tray menu (or Ctrl+C in the terminal).
 
+### Build the installer
+
+```bash
+npm run tauri build
+```
+
+This produces `src-tauri/target/release/bundle/nsis/Tasks Organizer_1.0.0_x64-setup.exe`, a per-user installer that needs no administrator rights. It is not code-signed, so Windows SmartScreen shows "Windows protected your PC" the first time: choose **More info**, then **Run anyway**. On Windows 10 the installer downloads WebView2 if it is missing. The first build also downloads the NSIS tooling.
+
+Your data lives in `%APPDATA%\com.andre.task-organizer`: the database `tasks.db`, and a `backups` folder with the automatic safety copies made before an import. A development run and an installed copy use the same folder, so they share the same data; export a backup before trying a new build. Uninstalling keeps the data unless you tick the box in the uninstaller.
+
 ### Other commands
 
 ```bash
@@ -85,10 +96,11 @@ src/
   store/          Zustand store (actions orchestrate domain + repositories + platform)
   domain/         Pure game rules and their tests
   repositories/   SQL access, the only code that touches the database
-  platform/       System features other than SQL (notifications)
+  platform/       System features other than SQL (notifications, file dialogs and files)
 src-tauri/
   migrations/     Numbered SQL migrations (tasks and ledger, settings, shop)
   capabilities/   Tauri permission files
+  icons/          App icons, generated from source.png (the monkey's face)
   src/lib.rs      Plugin registration, tray, close-to-tray, single instance
 ```
 
@@ -102,7 +114,7 @@ src-tauri/
 - [x] 5. Pixel-art pets (monkey and cat): 4 evolution stages, moods, animations
 - [x] 6. Coin shop and accessories
 - [x] 7. Widget behaviour: tray, reminders, single instance, new-day refresh
-- [ ] 8. Packaging and installer
+- [x] 8. Packaging: Windows installer, app icon, backup and restore
 - [ ] 9. Stretch: start with Windows, window position, compact view, recurring tasks, weekly stats, themes, more accessories
 
 ## License

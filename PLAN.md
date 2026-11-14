@@ -39,9 +39,9 @@ Tauri shell (Rust) + SQLite    src-tauri/
 | `store/` | `domain/`, `repositories/`, `platform/` | React components |
 | `domain/` | `date-fns`, other `domain/` files | React, Zustand, `@tauri-apps/*`, `repositories/`, `store/` |
 | `repositories/` | `@tauri-apps/plugin-sql`, `domain/` types | React, `store/`, `components/` |
-| `platform/` (Phase 7) | `@tauri-apps/plugin-notification` (system features other than SQL) | React, `store/`, `components/`, `domain/` |
+| `platform/` (Phases 7 and 8) | `@tauri-apps/plugin-notification`, `-dialog`, `-fs` and `@tauri-apps/api/path` (system features other than SQL) | React, `store/`, `components/`, `domain/` |
 
-`platform/` is to system features (notifications) what `repositories/` is to SQL: one thin wrapper per feature, called only by the store, that never throws and degrades quietly outside Tauri. The title bar's window buttons call `@tauri-apps/api/window` directly; that predates `platform/` and stays as reference code.
+`platform/` is to system features (notifications, file dialogs, files) what `repositories/` is to SQL: one thin wrapper per feature, called only by the store. `notifier.ts` never throws (a missing toast is harmless); `files.ts` throws errors with readable messages (a backup that silently failed would look like one that worked). The title bar's window buttons call `@tauri-apps/api/window` directly; that predates `platform/` and stays as reference code.
 
 Two extra rules that keep the domain testable:
 
@@ -62,7 +62,7 @@ tasks-organizor/
 │  ├─ App.tsx                      # three-panel grid, wires store to panels
 │  ├─ index.css                    # @import "tailwindcss"; theme tokens
 │  ├─ components/                  # AGENT
-│  │  ├─ layout/                   # TitleBar, Panel, SettingsMenu + SettingsPanel (Phase 7); CompactView is deferred
+│  │  ├─ layout/                   # TitleBar, Panel, SettingsMenu + SettingsPanel + BackupSection (Phases 7 and 8); CompactView is deferred
 │  │  ├─ calendar/                 # CalendarPanel (react-day-picker), dateAdapters.ts (the only Date <-> ISODate conversion)
 │  │  ├─ tasks/                    # TaskPanel, TaskRow, QuickAdd
 │  │  ├─ shop/                     # ShopPanel, ItemCard (Phase 6)
@@ -90,13 +90,15 @@ tasks-organizor/
 │  │  ├─ mood.ts                   # moodFor
 │  │  ├─ shop.ts                   # canPurchase, equippedMap, shopEntries
 │  │  ├─ reminders.ts              # reminderMessage, shouldRemind (Phase 7)
+│  │  ├─ backup.ts                 # buildBackup, parseBackup (validation), file names, summaries (Phase 8)
 │  │  └─ __tests__/
 │  ├─ repositories/                # ANDREI
 │  │  ├─ db.ts                     # single Database.load, shared handle
 │  │  ├─ taskRepo.ts
 │  │  ├─ rewardRepo.ts
-│  │  └─ shopRepo.ts
-│  ├─ platform/                    # notifier.ts: the only importer of the notification plugin (Phase 7)
+│  │  ├─ shopRepo.ts
+│  │  └─ backupRepo.ts             # readAll, replaceAll (Phase 8)
+│  ├─ platform/                    # notifier.ts (notification plugin), files.ts (dialog and fs plugins): the only importers
 │  └─ store/                       # ANDREI
 │     ├─ useAppStore.ts
 │     ├─ useNow.ts                 # the clock, refreshed every 30 s
@@ -107,6 +109,7 @@ tasks-organizor/
    ├─ Cargo.toml
    ├─ tauri.conf.json
    ├─ capabilities/default.json
+   ├─ icons/                       # generated from source.png (the monkey's face), Phase 8
    ├─ migrations/001_init.sql, 002_settings.sql, 003_shop.sql
    └─ src/lib.rs                   # plugin registration + migrations
 ```
@@ -354,6 +357,16 @@ The app is meant to stay running in the tray for days.
 - **Settings:** a gear in the title bar opens a small popover with the reminder checkbox and a Test reminder button (which ignores the setting and the daily limit and saves nothing).
 - **Deferred:** autostart, window-state, global shortcut, the compact view, a reminder hour and repeat reminders.
 
+### Packaging (Phase 8)
+
+- **Installer:** `npm run tauri build` produces `src-tauri/target/release/bundle/nsis/Tasks Organizer_1.0.0_x64-setup.exe`, an NSIS installer (`bundle.targets: ["nsis"]`), per-user (`installMode: currentUser`, no administrator prompt), English only. It is **not code-signed**, so SmartScreen warns on the first run (More info, then Run anyway). WebView2 is downloaded by the installer when missing (`downloadBootstrapper`). Name "Tasks Organizer", version 1.0.0 (in `tauri.conf.json`, `package.json` and `Cargo.toml`); the `identifier` is unchanged so existing data stays where it is.
+- **Data location:** `%APPDATA%\com.andre.task-organizer` holds `tasks.db` and `backups\` (the automatic safety copies). A development run and an installed copy share this folder, hence the same data. Uninstalling keeps it unless the box in the uninstaller is ticked.
+- **CSP:** `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost` for the packaged app (`'unsafe-inline'` styles because React writes inline styles). `devCsp` is `null` because Vite injects an inline script for hot reload. If a packaged build ever shows a blank window, the CSP is the first suspect (set `csp` to `null` to confirm).
+- **Icon:** the stage 1 monkey's face on the app's dark tile with an accent border, drawn in code. Every size is a whole-number scale of the 32 px drawing, and the 16 px size is a separate, pooled version, so nothing is blurred. `src-tauri/icons/source.png` (1024 px) is the master: `npx tauri icon src-tauri/icons/source.png` regenerates the platform formats (delete the Android and iOS folders it also writes; the 32/128/256/512 px PNGs and `icon.ico` were then replaced by the crisp versions). `public/favicon.svg` is the same face for the browser.
+- **Backup (JSON):** Settings, then Backup, has Export and Import. The file holds `{ app: "tasks-organizer", formatVersion: 1, exportedAt, tasks, rewardEvents, inventory, settings }`. Tasks of every status are included (archived ones too: the ledger points at them), the ledger is sorted by id and keeps its ids (the streak is cut by ledger id order), and the shop catalogue is not included (it comes from the migrations).
+- **Import is validated, confirmed, and recoverable.** `parseBackup` checks the whole file before anything is touched (format and version, every field, duplicate ids, ledger rows that point at missing tasks or unknown items, a negative coin balance, invalid known settings; unknown settings are ignored). Then the player confirms, a safety copy of the current data is written to `backups\before-import-<timestamp>.json` (if that fails, nothing is imported), and `backupRepo.replaceAll` deletes and re-inserts every table with the original ids. Like the other two-step writes it is repeatable instead of transactional: after a failure halfway, importing the same file again ends in the same state, and the safety copy is a second way back. Afterwards the store reloads everything as at startup (restored overdue tasks get their one-time streak reset; no reminder is sent).
+- **Deferred:** code signing, auto-update, a backup scheduler, autostart, window-state, global shortcut, compact view.
+
 ## 5. Repository contracts
 
 ```ts
@@ -499,7 +512,7 @@ The Phase 0 and Phase 1 components were written by the agent before this split a
 | 5 | Character | `moodFor`, `stageForLevel`, overdue sweep, one-shot queue in the store | `PixelSprite`, four stage bodies, four faces, state machine, animations | Completing a task plays `celebrate`; an overdue task shows `sad`; level 5 evolves |
 | 6 | Shop | `shopRepo`, `canPurchase`, seed items migration, purchase and equip actions | ShopPanel, accessory sprites, anchors | A bought item (glasses, laptop) persists after restart and fits every stage of both pets |
 | 7 | Widget behaviour | Tray, close-to-tray, single-instance and notification plugins; date-change refresh; daily reminder; settings popover. Autostart, window-state, global shortcut and CompactView moved to Phase 9. | SettingsMenu styling | The app lives in the tray and reminds of tasks due today |
-| 8 | Package | Icons, NSIS bundle config, JSON backup/export | Final visual polish pass | Installs from one `.exe` on another machine |
+| 8 | Package | NSIS bundle config, version and name, CSP, JSON backup export and import (dialog and fs plugins) | App icon (monkey face), favicon, visual polish pass (stronger control borders, scrollbars, selection) | Installs from one `.exe` on another machine |
 | 9 | Stretch | Recurring tasks, weekly stats queries | Stats chart, themes, more accessories | Open |
 
 Order rationale: phases 1–3 produce a usable task app before any game logic; phase 4 precedes the character because the character only reacts to values the engine produces.
