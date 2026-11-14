@@ -1,7 +1,8 @@
-import { useEffect } from "react";
 import { Panel } from "../layout/Panel";
-import { usePlayerProgress } from "../../store/selectors";
+import { usePetMood, usePetOneShot, usePlayerProgress } from "../../store/selectors";
 import { useAppStore } from "../../store/useAppStore";
+import type { Equipped } from "../../domain/types";
+import { Character } from "./Character";
 
 interface StatTileProps {
   label: string;
@@ -18,27 +19,30 @@ function StatTile({ label, value, valueClass }: StatTileProps) {
   );
 }
 
+// No accessories until the shop exists (Phase 6). One constant, so the prop never changes identity.
+const NO_ACCESSORIES: Equipped = { hat: null, glasses: null, held: null, background: null };
+
 export function CharacterPanel() {
   // Level, XP, coins and streak are derived from the ledger totals held in the store.
   const { level, intoLevel, needed, coins, streak } = usePlayerProgress();
-  const loadProgress = useAppStore((s) => s.loadProgress);
-
-  // Load once on startup. Action functions keep the same identity, so this does not re-run.
-  useEffect(() => {
-    void loadProgress();
-  }, [loadProgress]);
+  const mood = usePetMood();
+  const oneShot = usePetOneShot();
+  const stage = useAppStore((s) => s.displayStage);
+  const dequeueOneShot = useAppStore((s) => s.dequeueOneShot);
 
   const percent = Math.round((intoLevel / needed) * 100); // needed is always at least 100
 
   return (
     <Panel id="character-heading" title="Monkey">
-      {/* Placeholder stage: the pixel-art monkey replaces this box in Phase 5. */}
-      <div
-        role="img"
-        aria-label="Monkey character placeholder"
-        className="mx-auto flex h-40 w-40 items-center justify-center rounded-panel border-2 border-dashed border-border bg-bg font-pixel text-xs text-text-muted"
-      >
-        monkey here
+      <div className="mx-auto w-fit">
+        <Character
+          species="monkey"
+          stage={stage}
+          mood={mood}
+          equipped={NO_ACCESSORIES}
+          oneShot={oneShot}
+          onOneShotDone={dequeueOneShot}
+        />
       </div>
 
       <div className="mt-5 flex items-center justify-between">

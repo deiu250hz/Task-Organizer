@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Panel } from "../layout/Panel";
 import { TaskRow } from "./TaskRow";
 import { QuickAdd } from "./QuickAdd";
@@ -37,14 +36,8 @@ export function TaskPanel() {
   const tasks = useVisibleTasks();
   const selection = useAppStore((s) => s.selection);
   const error = useAppStore((s) => s.error);
-  const loadTasks = useAppStore((s) => s.loadTasks);
   const completeTask = useAppStore((s) => s.completeTask);
   const clearSelection = useAppStore((s) => s.clearSelection);
-
-  // Load once on startup. Action functions keep the same identity, so this does not re-run.
-  useEffect(() => {
-    void loadTasks();
-  }, [loadTasks]);
 
   // Derived during render: no extra state to keep in sync.
   const active = tasks.filter((task) => task.status === "active");
