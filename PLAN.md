@@ -77,7 +77,7 @@ tasks-organizor/
 │  │     │  ├─ types.ts            # Species, Palette, Grid, SpeciesArt, GRID_SIZE
 │  │     │  ├─ index.ts            # SPECIES registry
 │  │     │  └─ monkey/             # palette.ts, stages/stage1..4.ts (bodies), faces/idle|happy|sad|sleepy.ts (overlays per stage)
-│  │     ├─ anchors.ts             # eye and held-item positions per species and stage (Phase 6)
+│  │     ├─ anchors.ts             # eye, held-item and hat positions per species and stage (Phases 6 and 9)
 │  │     └─ accessories/           # palette.ts, paste.ts, glasses.ts, laptop.ts, index.ts registry by asset_key (Phase 6)
 │  ├─ domain/                      # ANDREI
 │  │  ├─ types.ts
@@ -110,7 +110,7 @@ tasks-organizor/
    ├─ tauri.conf.json
    ├─ capabilities/default.json
    ├─ icons/                       # generated from source.png (the monkey's face), Phase 8
-   ├─ migrations/001_init.sql, 002_settings.sql, 003_shop.sql
+   ├─ migrations/001_init.sql ... 004_more_items.sql
    └─ src/lib.rs                   # plugin registration + migrations
 ```
 
@@ -175,6 +175,25 @@ CREATE TABLE settings (
 ```
 
 The chosen pet is saved under the key `species` (`monkey` or `cat`). A missing or unknown value means "not chosen yet" and shows the first-run picker.
+
+`src-tauri/migrations/004_more_items.sql` adds ten more items (ids 3 to 12). Together with the two from 003 the catalogue is:
+
+| id | asset_key | Name | Slot | Price | Level |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `glasses_round` | Round Glasses | glasses | 10 | 1 |
+| 2 | `laptop` | Laptop | held | 20 | 1 |
+| 3 | `knit_beanie` | Knit Beanie | hat | 25 | 1 |
+| 4 | `party_hat` | Party Hat | hat | 40 | 2 |
+| 5 | `gold_crown` | Gold Crown | hat | 150 | 10 |
+| 6 | `sunglasses` | Sunglasses | glasses | 40 | 3 |
+| 7 | `monocle` | Monocle | glasses | 60 | 5 |
+| 8 | `coffee_cup` | Coffee Cup | held | 20 | 1 |
+| 9 | `clipboard` | Clipboard | held | 35 | 2 |
+| 10 | `game_controller` | Game Controller | held | 70 | 5 |
+| 11 | `night_sky` | Night Sky | background | 80 | 4 |
+| 12 | `sunny_meadow` | Sunny Meadow | background | 100 | 6 |
+
+Adding an item is a migration row plus a drawing registered under the same `asset_key` in `components/character/accessories/index.ts`; a test reads the migration files and fails if the two ever disagree (a missing drawing, a wrong slot, or a drawing with no row). Prices and levels are tuning values: changing one is a new migration.
 
 `src-tauri/migrations/003_shop.sql` (Phase 6):
 
@@ -478,9 +497,11 @@ Two kinds of state: a looping base state chosen by `mood`, and one-shot animatio
 - `PixelSprite` turns a grid plus a palette into `<rect>` elements (horizontal runs merged) inside an `<svg viewBox="0 0 32 32" shape-rendering="crispEdges">`.
 - One shared palette file keeps fur, skin and outline colours identical across all four stages.
 - Layer order, back to front: `background`, body (by stage), face (by mood), `held`, `glasses`, `hat`.
-- `anchors.ts` stores, per species and per stage, where the eyes are (top row and the left column of each 2x3 eye) and where a held item goes (top-left corner, just under the chin). Each accessory is drawn once and placed from these numbers, so one drawing fits both pets and all four stages. The numbers come from the sprites, so re-check them (`accessories.test.ts` does) whenever a sprite changes. A hat anchor is added with the first hat.
+- `anchors.ts` stores, per species and per stage, where the eyes are (top row and the left column of each 2x3 eye) and where a held item goes (top-left corner, just under the chin). Each accessory is drawn once and placed from these numbers, so one drawing fits both pets and all four stages. The numbers come from the sprites, so re-check them (`accessories.test.ts` does) whenever a sprite changes. The `hat` anchor is `{ x: 16, bottomY }` with `bottomY` always two rows above the eyes (the glasses frame starts one row above), so hats and glasses never touch; a hat is at most 4 rows tall because the stage 4 monkey has only 4 rows above its eyes.
 - Accessories (Phase 6): `glasses_round` draws a 4x5 frame around each eye (the eyes show through) and a bridge as wide as the gap between the eyes; `laptop` is a 12x7 grid pasted at the held anchor, always below every face pixel. Accessory palette keys are UPPERCASE and pet keys lowercase, so `Character` merges both into one palette without clashes. `accessoryLayers(equipped, anchors)` returns `{ behind, front }`; an unknown asset key (stale database) draws nothing. `PixelSprite` accepts grids of any size (the viewBox follows the grid), which the shop icons use.
-- The shop sits under the pet in a Stats | Shop tab strip. Buying equips the item and plays the `equip` hop; equipping another item of the same slot swaps it; unequipping is silent.
+- Item art (Phase 9): hats are drawn once and placed by the hat anchor (`hats.ts`), held items share the laptop's 12 px slot and sit just under the chin so they never touch the face (`heldItems.ts`), sunglasses cover the eyes completely and the monocle frames only the eye on the right of the picture (`glasses.ts`), and backgrounds are full 32x32 scenes (`backgrounds.ts`) with a 16x16 thumbnail for the shop card.
+- **A background is a still layer behind the animated pet.** `Character` renders it in its own element (`.pet-backdrop`) outside the animated `.pet`, so the idle bob and the one-shot hops never move the scenery. The pet itself is drawn as body, face, held, glasses, hat.
+- The shop sits under the pet in a Stats | Shop tab strip. The pet and the tabs stay in place and only the tab content scrolls. The shop groups its items under Hats, Glasses, Held items and Backgrounds (`groupBySlot`). Buying equips the item and plays the `equip` hop; equipping another item of the same slot swaps it; unequipping is silent.
 - Animation is CSS only: two-frame loops using `steps()` on transform or opacity. No per-frame redraws in React.
 - Stage progression reads as growth: stage 1 small, stage 4 the "buffed" monkey. Silhouette changes; palette does not.
 
@@ -510,7 +531,7 @@ The Phase 0 and Phase 1 components were written by the agent before this split a
 | 3 | Calendar | `dates.ts` with tests, range query, `selection` state and actions | CalendarPanel: day and range selection, task dots | A task on 16–18 Nov shows on all three days |
 | 4 | Gamification engine | `rewards`, `levels`, `streak` with Vitest tests; `rewardRepo`; ledger write inside `complete` | XP bar, level badge, coin and streak tiles | Tests pass; completing a task moves the XP bar |
 | 5 | Character | `moodFor`, `stageForLevel`, overdue sweep, one-shot queue in the store | `PixelSprite`, four stage bodies, four faces, state machine, animations | Completing a task plays `celebrate`; an overdue task shows `sad`; level 5 evolves |
-| 6 | Shop | `shopRepo`, `canPurchase`, seed items migration, purchase and equip actions | ShopPanel, accessory sprites, anchors | A bought item (glasses, laptop) persists after restart and fits every stage of both pets |
+| 6 | Shop | `shopRepo`, `canPurchase`, seed items migration, purchase and equip actions | ShopPanel, accessory sprites, anchors | A bought item persists after restart and fits every stage of both pets (twelve items after the Phase 9 additions) |
 | 7 | Widget behaviour | Tray, close-to-tray, single-instance and notification plugins; date-change refresh; daily reminder; settings popover. Autostart, window-state, global shortcut and CompactView moved to Phase 9. | SettingsMenu styling | The app lives in the tray and reminds of tasks due today |
 | 8 | Package | NSIS bundle config, version and name, CSP, JSON backup export and import (dialog and fs plugins) | App icon (monkey face), favicon, visual polish pass (stronger control borders, scrollbars, selection) | Installs from one `.exe` on another machine |
 | 9 | Stretch | Recurring tasks, weekly stats queries | Stats chart, themes, more accessories | Open |

@@ -127,7 +127,7 @@ Bring these up when the relevant code is being written; do not wait to be asked.
 - All art is code. Each sprite is a 32×32 grid (array of 32 strings, one palette key per character, `.` transparent) rendered by `PixelSprite` as merged `<rect>` runs inside `<svg viewBox="0 0 32 32" shape-rendering="crispEdges">`.
 - No image files, sprite sheets, canvas, Rive, Lottie or icon fonts for the character or accessories.
 - One shared palette in `palette.ts`. Stages change silhouette and size, never the palette.
-- Layer order, back to front: background, body (stage), face (mood), held, glasses, hat.
+- Layer order, back to front: background, body (stage), face (mood), held, glasses, hat. The background is rendered in its own element behind the animated pet (`.pet-backdrop`, outside `.pet`), so it stays still while the pet bobs and hops.
 - Accessories are positioned through `anchors.ts` (per stage, per slot). Each accessory is drawn once and must fit all four stages.
 - Moods `idle`, `happy`, `sad`, `sleepy` are looping states. `celebrate`, `levelUp`, `evolve`, `equip` are one-shots. See the state machine in `PLAN.md`.
 - Animation is CSS only: short `steps()` keyframes on transform or opacity. Respect `prefers-reduced-motion`.
