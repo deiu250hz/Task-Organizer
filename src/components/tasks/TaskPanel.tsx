@@ -4,23 +4,51 @@ import { QuickAdd } from "./QuickAdd";
 import { useVisibleTasks } from "../../store/selectors";
 import { useAppStore } from "../../store/useAppStore";
 import { formatDayRange } from "../../domain/dates";
-import type { Task } from "../../domain/types";
+import type { Task, TaskGroup as TaskGroupName } from "../../domain/types";
 
 interface TaskGroupProps {
+  group: TaskGroupName;
   heading: string;
   tasks: Task[];
+  collapsed: boolean;
+  onToggle: (group: TaskGroupName, collapsed: boolean) => void;
   onComplete: (id: number) => void;
   onDelete: (id: number) => void;
 }
 
-function TaskGroup({ heading, tasks, onComplete, onDelete }: TaskGroupProps) {
+function TaskGroup({
+  group,
+  heading,
+  tasks,
+  collapsed,
+  onToggle,
+  onComplete,
+  onDelete,
+}: TaskGroupProps) {
   if (tasks.length === 0) return null;
+  const listId = `task-group-${group}`;
   return (
     <div className="mb-5 last:mb-0">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
-        {heading}
+      <h3 className="mb-2">
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          aria-controls={listId}
+          onClick={() => onToggle(group, !collapsed)}
+          className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-xs font-semibold uppercase tracking-wider text-text-muted transition-colors hover:bg-surface-raised hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <span
+            aria-hidden="true"
+            className={`inline-block transition-transform motion-reduce:transition-none ${collapsed ? "" : "rotate-90"}`}
+          >
+            ▸
+          </span>
+          <span>
+            {heading} · {tasks.length}
+          </span>
+        </button>
       </h3>
-      <ul className="flex flex-col gap-2">
+      <ul id={listId} hidden={collapsed} className="flex flex-col gap-2">
         {tasks.map((task) => (
           // The database id is stable, so it is the right key (never the array index).
           <TaskRow key={task.id} task={task} onComplete={onComplete} onDelete={onDelete} />
@@ -40,6 +68,8 @@ export function TaskPanel() {
   const completeTask = useAppStore((s) => s.completeTask);
   const deleteTask = useAppStore((s) => s.deleteTask);
   const clearSelection = useAppStore((s) => s.clearSelection);
+  const collapsedGroups = useAppStore((s) => s.collapsedGroups);
+  const setGroupCollapsed = useAppStore((s) => s.setGroupCollapsed);
 
   // Derived during render: no extra state to keep in sync.
   const active = tasks.filter((task) => task.status === "active");
@@ -84,8 +114,24 @@ export function TaskPanel() {
         </p>
       )}
 
-      <TaskGroup heading="Active" tasks={active} onComplete={completeTask} onDelete={deleteTask} />
-      <TaskGroup heading="Done" tasks={done} onComplete={completeTask} onDelete={deleteTask} />
+      <TaskGroup
+        group="active"
+        heading="Active"
+        tasks={active}
+        collapsed={collapsedGroups.active}
+        onToggle={setGroupCollapsed}
+        onComplete={completeTask}
+        onDelete={deleteTask}
+      />
+      <TaskGroup
+        group="done"
+        heading="Done"
+        tasks={done}
+        collapsed={collapsedGroups.done}
+        onToggle={setGroupCollapsed}
+        onComplete={completeTask}
+        onDelete={deleteTask}
+      />
     </Panel>
   );
 }

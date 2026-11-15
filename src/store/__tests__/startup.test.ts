@@ -69,8 +69,10 @@ describe("startup", () => {
       key === "species" ? "cat" : key === "reminders" ? "0" : key === "lastReminderDay" ? "2026-11-14" : null,
     );
     await Promise.all([useAppStore.getState().startup(), useAppStore.getState().startup()]);
-    // three keys, read once: a second startup() call shares the first run
-    expect(settingsRepo.get).toHaveBeenCalledTimes(3);
+    // five keys, read once: a second startup() call shares the first run
+    expect(settingsRepo.get).toHaveBeenCalledTimes(5);
+    expect(settingsRepo.get).toHaveBeenCalledWith("collapsedActive");
+    expect(settingsRepo.get).toHaveBeenCalledWith("collapsedDone");
     expect(settingsRepo.get).toHaveBeenCalledWith("species");
     expect(settingsRepo.get).toHaveBeenCalledWith("reminders");
     expect(settingsRepo.get).toHaveBeenCalledWith("lastReminderDay");

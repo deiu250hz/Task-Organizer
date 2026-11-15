@@ -18,6 +18,7 @@ import { isSpecies, type Species } from "../domain/species";
 import { streakFrom } from "../domain/streak";
 import { canDelete, canStartOn, countActiveOn, countOverdue, newlyOverdue } from "../domain/tasks";
 import type {
+  CollapsedGroups,
   DateSelection,
   ISODate,
   Item,
@@ -26,6 +27,7 @@ import type {
   QueuedOneShot,
   Stage,
   Task,
+  TaskGroup,
   Totals,
 } from "../domain/types";
 import { files } from "../platform/files";
@@ -46,6 +48,11 @@ function messageOf(error: unknown): string {
 const SPECIES_KEY = "species";
 const REMINDERS_KEY = "reminders";
 const LAST_REMINDER_KEY = "lastReminderDay";
+// Whether each task group is collapsed ("1" / "0", a missing key means expanded).
+const COLLAPSED_KEYS: Record<TaskGroup, string> = {
+  active: "collapsedActive",
+  done: "collapsedDone",
+};
 
 const REMINDER_TITLE = "Tasks Organizer";
 
@@ -103,6 +110,8 @@ interface AppState {
   remindersEnabled: boolean;
   /** The day a reminder was last sent, or null. Saved in settings. */
   lastReminderDay: ISODate | null;
+  /** Which task groups are collapsed in the task panel. Saved in settings; both expanded by default. */
+  collapsedGroups: CollapsedGroups;
   /** A valid backup waiting for the player's confirmation, or null. */
   pendingImport: PendingImport | null;
   /** Everything the shop sells. Static data, loaded once at startup. */
@@ -121,6 +130,8 @@ interface AppState {
   loadSettings(): Promise<void>;
   /** Saves the setting, then updates the state. On failure the old value stays and `error` is set. */
   setRemindersEnabled(enabled: boolean): Promise<void>;
+  /** Saves whether the group is collapsed, then updates the state. On failure the old value stays and `error` is set. */
+  setGroupCollapsed(group: TaskGroup, collapsed: boolean): Promise<void>;
   /** Sends the daily reminder if the rules allow it (see domain/reminders). Saves the day only if it was really sent. */
   remindIfDue(): Promise<void>;
   /** Sends a sample notification now, ignoring the daily limit. Resolves true when it was shown. */
@@ -175,6 +186,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   settingsLoaded: false,
   remindersEnabled: true,
   lastReminderDay: null,
+  collapsedGroups: { active: false, done: false },
   pendingImport: null,
   items: [],
   owned: [],
@@ -213,15 +225,19 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const [saved, reminders, lastReminder] = await Promise.all([
+      const [saved, reminders, lastReminder, collapsedActive, collapsedDone] = await Promise.all([
         settingsRepo.get(SPECIES_KEY),
         settingsRepo.get(REMINDERS_KEY),
         settingsRepo.get(LAST_REMINDER_KEY),
+        settingsRepo.get(COLLAPSED_KEYS.active),
+        settingsRepo.get(COLLAPSED_KEYS.done),
       ]);
       set({
         species: isSpecies(saved) ? saved : null,
         remindersEnabled: reminders !== "0", // missing (never set) means on
         lastReminderDay: lastReminder, // any other day than today simply means "not reminded today"
+        // Only "1" collapses; a missing or unknown value leaves the group expanded.
+        collapsedGroups: { active: collapsedActive === "1", done: collapsedDone === "1" },
         settingsLoaded: true,
       });
     } catch (error) {
@@ -247,6 +263,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
       set({ remindersEnabled: enabled, error: null });
     } catch (error) {
       set({ error: messageOf(error) }); // keep the previous value: the checkbox stays where it was
+    }
+  },
+
+  setGroupCollapsed: async (group, collapsed) => {
+    if (get().collapsedGroups[group] === collapsed) return;
+    try {
+      await settingsRepo.set(COLLAPSED_KEYS[group], collapsed ? "1" : "0");
+      set({ collapsedGroups: { ...get().collapsedGroups, [group]: collapsed }, error: null });
+    } catch (error) {
+      set({ error: messageOf(error) }); // keep the previous value: the group stays as it was
     }
   },
 
