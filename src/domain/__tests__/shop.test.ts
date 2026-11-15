@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canPurchase, equippedMap, shopEntries } from "../shop";
+import { canPurchase, equippedMap, groupBySlot, shopEntries } from "../shop";
 import type { Item, OwnedItem } from "../types";
 
 const glasses: Item = { id: 1, slot: "glasses", name: "Round Glasses", price: 10, minLevel: 1, assetKey: "glasses_round" };
@@ -109,5 +109,37 @@ describe("shopEntries", () => {
 
   it("keeps an owned item usable even when the player no longer has the coins", () => {
     expect(shopEntries(items, [{ itemId: 2, equipped: false }], 0, 1)[1].state).toBe("equip");
+  });
+});
+
+describe("groupBySlot", () => {
+  const beanie: Item = { id: 3, slot: "hat", name: "Beanie", price: 25, minLevel: 1, assetKey: "knit_beanie" };
+  const crown: Item = { id: 4, slot: "hat", name: "Crown", price: 150, minLevel: 10, assetKey: "gold_crown" };
+  const sky: Item = { id: 5, slot: "background", name: "Night Sky", price: 80, minLevel: 4, assetKey: "night_sky" };
+
+  it("puts the groups in a fixed order, whatever order the items come in", () => {
+    const entries = shopEntries([sky, laptop, glasses, beanie], [], 0, 1);
+    expect(groupBySlot(entries).map((group) => group.slot)).toEqual(["hat", "glasses", "held", "background"]);
+  });
+
+  it("leaves out a slot that has no items", () => {
+    const entries = shopEntries([glasses, sky], [], 0, 1);
+    expect(groupBySlot(entries).map((group) => group.slot)).toEqual(["glasses", "background"]);
+  });
+
+  it("keeps the order of the entries inside a group", () => {
+    const entries = shopEntries([crown, laptop, beanie], [], 0, 1);
+    const hats = groupBySlot(entries).find((group) => group.slot === "hat");
+    expect(hats?.entries.map((entry) => entry.item.id)).toEqual([4, 3]);
+  });
+
+  it("keeps every entry exactly once", () => {
+    const entries = shopEntries([glasses, laptop, beanie, crown, sky], [], 0, 1);
+    const ids = groupBySlot(entries).flatMap((group) => group.entries.map((entry) => entry.item.id));
+    expect([...ids].sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("returns nothing for an empty shop", () => {
+    expect(groupBySlot([])).toEqual([]);
   });
 });
