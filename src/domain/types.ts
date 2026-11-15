@@ -67,3 +67,8 @@ export interface OwnedItem {
 }
 
 export type Equipped = Record<Slot, string | null>; // slot -> assetKey
+
+/** The two groups the task panel shows. */
+export type TaskGroup = "active" | "done";
+/** true = the group is collapsed (its heading stays, its tasks are hidden). */
+export type CollapsedGroups = Record<TaskGroup, boolean>;

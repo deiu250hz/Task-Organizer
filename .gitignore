@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 graphify-out/
+
+# Markdown files (CLAUDE.md, PLAN.md and README.md are already tracked and stay tracked)
+*.md

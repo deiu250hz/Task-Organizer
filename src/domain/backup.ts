@@ -223,6 +223,8 @@ const SETTING_CHECKS: Record<string, (value: string) => boolean> = {
   species: (value) => isSpecies(value),
   reminders: (value) => value === "0" || value === "1",
   lastReminderDay: (value) => isISODate(value),
+  collapsedActive: (value) => value === "0" || value === "1",
+  collapsedDone: (value) => value === "0" || value === "1",
 };
 
 function parseSettings(rawList: unknown[]): BackupSetting[] {
