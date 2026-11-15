@@ -26,6 +26,7 @@ export function renderWith(partial: Partial<StoreState>, ui: ReactElement): stri
       settingsLoaded: true,
       remindersEnabled: true,
       lastReminderDay: null,
+      theme: "dusk",
       pendingImport: null,
       items: [],
       owned: [],

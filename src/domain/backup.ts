@@ -3,6 +3,7 @@
 import { format, isValid, parseISO } from "date-fns";
 import { toISODate } from "./dates";
 import { isSpecies } from "./species";
+import { isTheme } from "./themes";
 import type { Difficulty, ISODate, TaskStatus } from "./types";
 
 export const BACKUP_APP = "tasks-organizer";
@@ -223,6 +224,7 @@ const SETTING_CHECKS: Record<string, (value: string) => boolean> = {
   species: (value) => isSpecies(value),
   reminders: (value) => value === "0" || value === "1",
   lastReminderDay: (value) => isISODate(value),
+  theme: (value) => isTheme(value),
   collapsedActive: (value) => value === "0" || value === "1",
   collapsedDone: (value) => value === "0" || value === "1",
 };

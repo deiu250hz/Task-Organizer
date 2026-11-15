@@ -2,14 +2,43 @@
 
 A gamified desktop task manager for Windows. Plan tasks on a calendar, complete them to earn XP and coins, and watch a retro pixel-art pet level up, evolve and wear the accessories you buy.
 
-> **Status:** version 1.0.0. Phases 0 to 8 of 9 are done: the app is fully playable, lives in the system tray, can back up and restore your data, and builds into a Windows installer. Only the stretch goals (Phase 9) are left. See the [roadmap](#roadmap).
+> **Status:** version 1.1.0. Phases 0 to 8 of 9 are done: the app is fully playable, lives in the system tray, can back up and restore your data, and builds into a Windows installer. Only the stretch goals (Phase 9) are left. See the [roadmap](#roadmap).
 
 > **Platforms:** Windows 10 and 11. Tauri is cross-platform, so a macOS version is possible, but it is not configured or tested yet.
+
+## Screenshots
+
+![The Tasks Organizer window: the calendar on the left, the task list in the middle and the monkey with its level, XP bar, coins and streak on the right](Screenshots/tasks-and-calendar.png)
+
+*Three panels in one window: the calendar (days with tasks are marked), the task list, and your pet with its level, XP bar, coins and streak. Each task group, Active and Done, can be collapsed from its header, and the app remembers your choice.*
+
+![Selecting 16 to 22 November in the calendar filters the task list to that range](Screenshots/date-range.png)
+
+*Click a day, then another, to pick a range. The task list filters to the tasks that overlap it, and "Show all" brings everything back. Here the Orange Tabby cat is the active pet.*
+
+![The Shop tab showing held items, with the Laptop equipped on the cat and an inline delete confirmation on a task](Screenshots/shop.png)
+
+*The Shop tab sits under the pet and groups items by slot. Buying an item equips it right away, and anything you can't afford yet shows how many more coins you need. On the left, deleting a task asks for an inline confirmation; the XP and coins you earned from it stay.*
+
+![The pet picker showing the monkey and the cat, with a note that level, XP and coins stay when you switch](Screenshots/choose-pet.png)
+
+*Pick a monkey or a cat, and change your mind at any time. Your level, XP and coins belong to you, not the pet.*
+
+![The monkey's idle pose, four mood buttons and its four evolution stages side by side](Screenshots/monkey-evolution.png)
+
+*The monkey's pixel art, drawn entirely in code. The pet changes form at levels 5, 10 and 25, so there are four evolution stages, and each one has four moods: idle, happy, sad and sleepy. This is a preview of the art, not a window of the app.*
+
+![The settings menu in the Game Boy theme, with the reminder option, the theme picker and the backup buttons](Screenshots/settings-themes.png)
+
+*The settings menu (the icon in the title bar) holds the daily reminder switch, the theme picker and backup export and import. Pick Dusk, Forest, Ocean or Game Boy and the whole app changes colour straight away; the choice is remembered. Here the app is in the Game Boy theme.*
+
+The first four screenshots use the Ocean theme.
 
 ## Features
 
 - **Calendar panel**: select a single day or a range of days; days with tasks are marked. Tasks can only be added from today onwards, and overdue tasks from earlier days can still be completed.
-- **Task panel**: active, upcoming and completed tasks, with easy / medium / hard difficulty. Active tasks can be deleted (archived) after an inline confirmation; your earned XP and coins stay.
+- **Task panel**: active, upcoming and completed tasks, with easy / medium / hard difficulty. Active tasks can be deleted (archived) after an inline confirmation; your earned XP and coins stay. The Active and Done groups collapse from their headers, and the app remembers which are collapsed.
+- **Themes**: four colour themes, Dusk (the default), Forest, Ocean and Game Boy, chosen in the settings menu and remembered between runs.
 - **Rewards**: each completed task earns XP and coins, with a bonus for daily streaks.
 - **Two pets**: pick a monkey or an Orange Tabby cat (and change your mind any time). Level, XP and coins belong to you, not the pet, so switching never loses progress.
 - **Evolving character**: the pet levels up with XP and changes form at levels 5, 10 and 25.
@@ -77,7 +106,7 @@ The first build compiles the Rust side and takes a few minutes. Because the clos
 npm run tauri build
 ```
 
-This produces `src-tauri/target/release/bundle/nsis/Tasks Organizer_1.0.0_x64-setup.exe`, a per-user installer that needs no administrator rights. It is not code-signed, so Windows SmartScreen shows "Windows protected your PC" the first time: choose **More info**, then **Run anyway**. On Windows 10 the installer downloads WebView2 if it is missing. The first build also downloads the NSIS tooling.
+This produces `src-tauri/target/release/bundle/nsis/Tasks Organizer_1.1.0_x64-setup.exe`, a per-user installer that needs no administrator rights. It is not code-signed, so Windows SmartScreen shows "Windows protected your PC" the first time: choose **More info**, then **Run anyway**. On Windows 10 the installer downloads WebView2 if it is missing. The first build also downloads the NSIS tooling.
 
 Your data lives in `%APPDATA%\com.andre.task-organizer`: the database `tasks.db`, and a `backups` folder with the automatic safety copies made before an import. A development run and an installed copy use the same folder, so they share the same data; export a backup before trying a new build. Uninstalling keeps the data unless you tick the box in the uninstaller.
 
@@ -100,7 +129,7 @@ src/
   repositories/   SQL access, the only code that touches the database
   platform/       System features other than SQL (notifications, file dialogs and files)
 src-tauri/
-  migrations/     Numbered SQL migrations (tasks and ledger, settings, shop)
+  migrations/     Numbered SQL migrations (tasks and ledger, settings, shop, more shop items)
   capabilities/   Tauri permission files
   icons/          App icons, generated from source.png (the monkey's face)
   src/lib.rs      Plugin registration, tray, close-to-tray, single instance
@@ -117,7 +146,7 @@ src-tauri/
 - [x] 6. Coin shop and accessories
 - [x] 7. Widget behaviour: tray, reminders, single instance, new-day refresh
 - [x] 8. Packaging: Windows installer, app icon, backup and restore
-- [ ] 9. Stretch: start with Windows, window position, compact view, recurring tasks, weekly stats, themes, more accessories
+- [ ] 9. Stretch: start with Windows, window position, compact view, recurring tasks, weekly stats, more accessories (colour themes are already done)
 
 ## License
 

@@ -8,6 +8,13 @@ import { useDayWatcher } from "./store/useDayWatcher";
 
 export function App() {
   const startup = useAppStore((s) => s.startup);
+  const theme = useAppStore((s) => s.theme);
+
+  // The theme is a data-theme attribute on <html>; the colours for each name live in index.css.
+  // Setting the same value twice (StrictMode) changes nothing.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   // The app can stay open for days in the tray; this moves it to the new day (and sweeps, reminds).
   useDayWatcher();
