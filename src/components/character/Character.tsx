@@ -36,13 +36,21 @@ export function Character({ species, stage, mood, equipped, oneShot, onOneShotDo
   // Memoized so PixelSprite sees the same object between renders.
   const palette = useMemo(() => ({ ...art.palette, ...ACCESSORY_PALETTE }), [art]);
 
-  // Layer order, back to front: background, body, face, held, glasses, hat. The anchors are looked up
-  // for the stage being drawn, so during an evolve each of the two sprites gets its own placement.
+  // Layer order, back to front: background, body, face, held, glasses, hat. The background is drawn
+  // on its own, behind the animated element (see the return below), so the scenery stays still while
+  // the pet bobs and hops. A background is the same scene for every stage, so any stage's anchors do.
+  const backdrop = useMemo(() => {
+    const { behind } = accessoryLayers(equipped, ANCHORS[species][stage]);
+    return behind.length === 0 ? null : composeLayers(behind);
+  }, [equipped, species, stage]);
+
+  // The pet itself: body, face, then held, glasses, hat. The anchors are looked up for the stage being
+  // drawn, so during an evolve each of the two sprites gets its own placement.
   const spriteFor = (forStage: Stage) => {
     const worn = accessoryLayers(equipped, ANCHORS[species][forStage]);
     return (
       <PixelSprite
-        grid={composeLayers([...worn.behind, art.bodies[forStage], art.faces[shownMood][forStage], ...worn.front])}
+        grid={composeLayers([art.bodies[forStage], art.faces[shownMood][forStage], ...worn.front])}
         palette={palette}
         size={size}
       />
@@ -58,30 +66,38 @@ export function Character({ species, stage, mood, equipped, oneShot, onOneShotDo
   const evolving = oneShot?.kind === "evolve" && oneShot.toStage !== undefined;
 
   return (
-    <div
-      className="pet"
-      data-mood={shownMood}
-      data-shot={oneShot?.kind}
-      role="img"
-      aria-label={`${species}, stage ${stage}, feeling ${shownMood}`}
-      style={frameStyle}
-    >
+    // The stage holds the still background and, on top of it, the animated pet.
+    <div className="pet-stage" style={{ width: size, height: size }}>
+      {backdrop !== null && (
+        <div className="pet-backdrop" aria-hidden="true">
+          <PixelSprite grid={backdrop} palette={palette} size={size} />
+        </div>
+      )}
       <div
-        // key restarts the CSS animation for each new one-shot
-        key={oneShot?.id ?? "none"}
-        className="pet-shot"
-        data-kind={oneShot?.kind}
-        style={shotStyle}
-        onAnimationEnd={handleAnimationEnd}
+        className="pet"
+        data-mood={shownMood}
+        data-shot={oneShot?.kind}
+        role="img"
+        aria-label={`${species}, stage ${stage}, feeling ${shownMood}`}
+        style={frameStyle}
       >
-        {evolving && oneShot?.toStage !== undefined ? (
-          <>
-            <div className="pet-layer pet-evolve-out">{spriteFor(stage)}</div>
-            <div className="pet-layer pet-evolve-in">{spriteFor(oneShot.toStage)}</div>
-          </>
-        ) : (
-          <div className="pet-layer">{spriteFor(stage)}</div>
-        )}
+        <div
+          // key restarts the CSS animation for each new one-shot
+          key={oneShot?.id ?? "none"}
+          className="pet-shot"
+          data-kind={oneShot?.kind}
+          style={shotStyle}
+          onAnimationEnd={handleAnimationEnd}
+        >
+          {evolving && oneShot?.toStage !== undefined ? (
+            <>
+              <div className="pet-layer pet-evolve-out">{spriteFor(stage)}</div>
+              <div className="pet-layer pet-evolve-in">{spriteFor(oneShot.toStage)}</div>
+            </>
+          ) : (
+            <div className="pet-layer">{spriteFor(stage)}</div>
+          )}
+        </div>
       </div>
     </div>
   );

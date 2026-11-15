@@ -81,6 +81,17 @@
  * sit on .pet-shot (picked by data-kind, length from --shot-ms). The reduced-motion rule below
  * cuts every animation to a single instant, so one-shots still end and the queue still drains.
  */
+/* The stage holds a still background (an equipped scene) and the animated pet on top of it. The
+   background is NOT inside .pet, so the idle bob and the one-shot hops never move the scenery. */
+.pet-stage {
+  position: relative;
+}
+
+.pet-backdrop {
+  position: absolute;
+  inset: 0;
+}
+
 .pet {
   position: relative;
 }

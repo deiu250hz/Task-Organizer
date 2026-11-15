@@ -84,7 +84,7 @@ describe("accessory grids", () => {
   it("keeps the shop icons small and rectangular", () => {
     for (const art of Object.values(ACCESSORIES)) {
       expect(art.icon.length).toBeGreaterThan(0);
-      expect(art.icon.length).toBeLessThanOrEqual(12);
+      expect(art.icon.length).toBeLessThanOrEqual(16);
       expect(new Set(art.icon.map((row) => row.length)).size).toBe(1);
       expect(art.icon[0].length).toBeLessThanOrEqual(16);
     }

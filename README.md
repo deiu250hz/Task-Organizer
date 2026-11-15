@@ -14,14 +14,14 @@ A gamified desktop task manager for Windows. Plan tasks on a calendar, complete 
 - **Two pets**: pick a monkey or an Orange Tabby cat (and change your mind any time). Level, XP and coins belong to you, not the pet, so switching never loses progress.
 - **Evolving character**: the pet levels up with XP and changes form at levels 5, 10 and 25.
 - **Moods**: idle, happy, sleepy or sad. The pet is happy for an hour after you complete a task, and for the rest of the day once today's list is done. An overdue task resets your streak and makes it sad until you complete something; you never lose XP or coins.
-- **Shop**: spend coins on accessories that fit both pets at every stage. There are two items for now, Round Glasses and a Laptop. Buying one equips it, and one item can be worn per slot. The shop sits in a Stats | Shop tab under the pet.
+- **Shop**: spend coins on accessories that fit both pets at every stage. There are twelve items in four slots: three hats (Knit Beanie, Party Hat, Gold Crown), three pairs of glasses (Round, Sunglasses, Monocle), four held items (Laptop, Coffee Cup, Clipboard, Game Controller) and two backgrounds (Night Sky, Sunny Meadow). Buying one equips it, and one item can be worn per slot, so you can wear a hat, glasses, a held item and a background together. Higher-priced items unlock at higher levels. The shop sits in a Stats | Shop tab under the pet and groups the items by slot.
 - **Lives in the tray**: the close button hides the window to the system tray. Left-click the tray icon to show or hide it, right-click for Show and Quit. Starting a second copy brings the first one forward.
 - **Reminders**: one notification a day, when the app starts or a new day begins, that tells you how many tasks are due today and how many are overdue. It can be turned off in the settings (gear icon in the title bar).
 - **New-day aware**: left running for days, the app moves to the new day on its own: it flags tasks that just became overdue and refreshes the pet's mood.
 - **Backup and restore**: the settings (gear icon) menu exports everything (tasks, rewards, purchases, settings) to a JSON file and imports it again, on this PC or another. An import is checked completely before anything changes, asks you to confirm, and saves a safety copy of your current data first.
 - **Local only**: all data stays in one SQLite file on your machine.
 
-Not built yet: start with Windows, remembering the window size and position, a global shortcut, a compact always-on-top view, code signing and auto-update for the installer, and more shop items (hats, backgrounds).
+Not built yet: start with Windows, remembering the window size and position, a global shortcut, a compact always-on-top view, code signing and auto-update for the installer, and more shop items.
 
 ## Tech stack
 
