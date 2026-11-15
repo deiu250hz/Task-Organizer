@@ -16,6 +16,7 @@ import { rewardFor } from "../domain/rewards";
 import { canPurchase } from "../domain/shop";
 import { isSpecies, type Species } from "../domain/species";
 import { streakFrom } from "../domain/streak";
+import { DEFAULT_THEME, isTheme, type Theme } from "../domain/themes";
 import { canDelete, canStartOn, countActiveOn, countOverdue, newlyOverdue } from "../domain/tasks";
 import type {
   CollapsedGroups,
@@ -48,6 +49,8 @@ function messageOf(error: unknown): string {
 const SPECIES_KEY = "species";
 const REMINDERS_KEY = "reminders";
 const LAST_REMINDER_KEY = "lastReminderDay";
+// The chosen colour theme (a name from domain/themes; a missing or unknown value means the default).
+const THEME_KEY = "theme";
 // Whether each task group is collapsed ("1" / "0", a missing key means expanded).
 const COLLAPSED_KEYS: Record<TaskGroup, string> = {
   active: "collapsedActive",
@@ -110,6 +113,8 @@ interface AppState {
   remindersEnabled: boolean;
   /** The day a reminder was last sent, or null. Saved in settings. */
   lastReminderDay: ISODate | null;
+  /** The colour theme. Saved in settings; the default until the saved value has been read. */
+  theme: Theme;
   /** Which task groups are collapsed in the task panel. Saved in settings; both expanded by default. */
   collapsedGroups: CollapsedGroups;
   /** A valid backup waiting for the player's confirmation, or null. */
@@ -130,6 +135,8 @@ interface AppState {
   loadSettings(): Promise<void>;
   /** Saves the setting, then updates the state. On failure the old value stays and `error` is set. */
   setRemindersEnabled(enabled: boolean): Promise<void>;
+  /** Saves the theme, then updates the state. On failure the old theme stays and `error` is set. */
+  setTheme(theme: Theme): Promise<void>;
   /** Saves whether the group is collapsed, then updates the state. On failure the old value stays and `error` is set. */
   setGroupCollapsed(group: TaskGroup, collapsed: boolean): Promise<void>;
   /** Sends the daily reminder if the rules allow it (see domain/reminders). Saves the day only if it was really sent. */
@@ -186,6 +193,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   settingsLoaded: false,
   remindersEnabled: true,
   lastReminderDay: null,
+  theme: DEFAULT_THEME,
   collapsedGroups: { active: false, done: false },
   pendingImport: null,
   items: [],
@@ -225,10 +233,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const [saved, reminders, lastReminder, collapsedActive, collapsedDone] = await Promise.all([
+      const [saved, reminders, lastReminder, savedTheme, collapsedActive, collapsedDone] = await Promise.all([
         settingsRepo.get(SPECIES_KEY),
         settingsRepo.get(REMINDERS_KEY),
         settingsRepo.get(LAST_REMINDER_KEY),
+        settingsRepo.get(THEME_KEY),
         settingsRepo.get(COLLAPSED_KEYS.active),
         settingsRepo.get(COLLAPSED_KEYS.done),
       ]);
@@ -236,6 +245,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         species: isSpecies(saved) ? saved : null,
         remindersEnabled: reminders !== "0", // missing (never set) means on
         lastReminderDay: lastReminder, // any other day than today simply means "not reminded today"
+        theme: isTheme(savedTheme) ? savedTheme : DEFAULT_THEME,
         // Only "1" collapses; a missing or unknown value leaves the group expanded.
         collapsedGroups: { active: collapsedActive === "1", done: collapsedDone === "1" },
         settingsLoaded: true,
@@ -263,6 +273,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
       set({ remindersEnabled: enabled, error: null });
     } catch (error) {
       set({ error: messageOf(error) }); // keep the previous value: the checkbox stays where it was
+    }
+  },
+
+  setTheme: async (theme) => {
+    if (get().theme === theme) return;
+    try {
+      await settingsRepo.set(THEME_KEY, theme);
+      set({ theme, error: null });
+    } catch (error) {
+      set({ error: messageOf(error) }); // keep the previous theme: the colours stay as they were
     }
   },
 

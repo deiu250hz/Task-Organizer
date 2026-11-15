@@ -10,6 +10,8 @@ export function SettingsMenu() {
   const remindersEnabled = useAppStore((s) => s.remindersEnabled);
   const setRemindersEnabled = useAppStore((s) => s.setRemindersEnabled);
   const sendTestReminder = useAppStore((s) => s.sendTestReminder);
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
   const pendingImport = useAppStore((s) => s.pendingImport);
   const exportBackup = useAppStore((s) => s.exportBackup);
   const prepareImport = useAppStore((s) => s.prepareImport);
@@ -99,6 +101,8 @@ export function SettingsMenu() {
           onRemindersChange={(enabled) => void setRemindersEnabled(enabled)}
           onTest={() => void handleTest()}
           testResult={testResult}
+          theme={theme}
+          onThemeChange={(next) => void setTheme(next)}
           backup={{
             busy,
             message: backupMessage,

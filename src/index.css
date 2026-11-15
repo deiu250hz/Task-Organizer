@@ -76,6 +76,95 @@
 }
 
 /*
+ * Colour themes. The app sets data-theme on <html>; each block below overrides the @theme colour
+ * variables, and every utility (bg-surface, text-accent...) follows because it reads the variable.
+ * Dusk is the @theme default; its block exists so a swatch can preview it while another theme is
+ * active (any element with data-theme gets that theme's values). All four are dark, so
+ * color-scheme stays dark. Contrast: text >= 10:1, text-muted >= 6:1, border-strong >= 3:1 on
+ * bg, surface and surface-raised; on-accent >= 8:1 on accent.
+ */
+@layer base {
+  [data-theme="dusk"] {
+    --color-bg: #14121f;
+    --color-surface: #1e1b2e;
+    --color-surface-raised: #29253d;
+    --color-border: #3d3858;
+    --color-border-strong: #776fa0;
+    --color-text: #f1edff;
+    --color-text-muted: #b4aed0;
+    --color-accent: #f2a23a;
+    --color-accent-hover: #ffb85c;
+    --color-on-accent: #1a1203;
+    --color-focus: #7dd3fc;
+    --color-xp: #6ee7a8;
+    --color-coin: #fbd34d;
+    --color-streak: #fb7c4a;
+    --color-success: #4ade80;
+    --color-danger: #ff6b7a;
+  }
+
+  /* Deep moss with a warm amber accent. */
+  [data-theme="forest"] {
+    --color-bg: #0e1a13;
+    --color-surface: #15251c;
+    --color-surface-raised: #1e3227;
+    --color-border: #2c4a39;
+    --color-border-strong: #5f8f74;
+    --color-text: #ebf6ee;
+    --color-text-muted: #a8c6b3;
+    --color-accent: #eab04c;
+    --color-accent-hover: #f6c46e;
+    --color-on-accent: #1a1203;
+    --color-focus: #93e2ff;
+    --color-xp: #8ff0b6;
+    --color-coin: #fbd34d;
+    --color-streak: #ff8f5e;
+    --color-success: #5ee08a;
+    --color-danger: #ff7d87;
+  }
+
+  /* Navy with a teal accent; the focus ring is amber so it never blends with the accent. */
+  [data-theme="ocean"] {
+    --color-bg: #0a1322;
+    --color-surface: #101c31;
+    --color-surface-raised: #192843;
+    --color-border: #283a5c;
+    --color-border-strong: #6782b0;
+    --color-text: #e9f2ff;
+    --color-text-muted: #a9badb;
+    --color-accent: #2dd4bf;
+    --color-accent-hover: #5eead4;
+    --color-on-accent: #03211d;
+    --color-focus: #fcd34d;
+    --color-xp: #7cf0b0;
+    --color-coin: #fbd34d;
+    --color-streak: #fb923c;
+    --color-success: #4ade80;
+    --color-danger: #ff7484;
+  }
+
+  /* Olive handheld greens. Danger stays orange-red so errors are still obvious. */
+  [data-theme="gameboy"] {
+    --color-bg: #0c1d0c;
+    --color-surface: #122912;
+    --color-surface-raised: #1b381b;
+    --color-border: #2c4f22;
+    --color-border-strong: #6f9424;
+    --color-text: #eef8c8;
+    --color-text-muted: #a9c45a;
+    --color-accent: #c3df45;
+    --color-accent-hover: #d6ef6a;
+    --color-on-accent: #0f380f;
+    --color-focus: #f4ffc8;
+    --color-xp: #9bd84a;
+    --color-coin: #e8d65a;
+    --color-streak: #e8a64a;
+    --color-success: #9bd84a;
+    --color-danger: #ff9478;
+  }
+}
+
+/*
  * Pet animations. Only transform and opacity change, always in whole sprite pixels (--px) and in
  * discrete steps, so the pixel art never blurs. Loops sit on .pet (picked by data-mood); one-shots
  * sit on .pet-shot (picked by data-kind, length from --shot-ms). The reduced-motion rule below

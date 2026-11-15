@@ -26,6 +26,8 @@ function panel(overrides: Partial<SettingsPanelProps> = {}): string {
       onRemindersChange={noop}
       onTest={noop}
       testResult="none"
+      theme="dusk"
+      onThemeChange={noop}
       backup={idleBackup}
       {...overrides}
     />,
@@ -55,6 +57,28 @@ describe("SettingsMenu", () => {
     expect(html).toContain('aria-label="Settings"');
     expect(html).toContain('aria-label="Minimize window"');
     expect(html).toContain('aria-label="Close window"');
+  });
+});
+
+describe("SettingsPanel theme picker", () => {
+  it("offers one named radio per theme in a labelled group", () => {
+    const html = panel();
+    expect(html).toContain("<legend");
+    expect(html.split('type="radio"').length - 1).toBe(4);
+    for (const label of ["Dusk", "Forest", "Ocean", "Game Boy"]) expect(html).toContain(label);
+  });
+
+  it("checks only the theme in use", () => {
+    const html = panel({ theme: "ocean" });
+    expect(html.split('checked=""').length - 1).toBe(2); // the reminders checkbox + the ocean radio
+    expect(html).toMatch(/value="ocean"[^>]*checked=""|checked=""[^>]*value="ocean"/);
+    expect(html).not.toMatch(/value="dusk"[^>]*checked=""|checked=""[^>]*value="dusk"/);
+  });
+
+  it("previews each theme's colours with a data-theme swatch, without hex values", () => {
+    const html = panel();
+    for (const name of ["dusk", "forest", "ocean", "gameboy"]) expect(html).toContain(`data-theme="${name}"`);
+    expect(html).not.toMatch(/#[0-9a-fA-F]{6}/);
   });
 });
 
@@ -129,8 +153,10 @@ describe("SettingsPanel", () => {
     expect(on).toContain("<label");
     expect(on).toContain("Remind me of tasks when the app starts or a new day begins");
     expect(on).toContain('type="checkbox"');
-    expect(on).toContain('checked=""');
-    expect(panel({ remindersEnabled: false })).not.toContain('checked=""');
+    // Only the checkbox is looked at: the theme radios have their own checked state.
+    const checkedCheckbox = /type="checkbox"[^>]*checked=""|checked=""[^>]*type="checkbox"/;
+    expect(on).toMatch(checkedCheckbox);
+    expect(panel({ remindersEnabled: false })).not.toMatch(checkedCheckbox);
   });
 
   it("names the group for screen readers and links it to the gear by id", () => {

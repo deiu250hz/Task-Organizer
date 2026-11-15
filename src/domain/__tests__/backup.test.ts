@@ -58,6 +58,7 @@ function fullData(): BackupData {
       { key: "species", value: "cat" },
       { key: "reminders", value: "0" },
       { key: "lastReminderDay", value: "2026-11-14" },
+      { key: "theme", value: "ocean" },
     ],
   };
 }
@@ -124,10 +125,10 @@ describe("parseBackup, accepting", () => {
 
   it("ignores a setting this version does not know, and imports the rest", () => {
     const result = parseWith((file) => {
-      (file.settings as unknown[]).push({ key: "theme", value: "pink" });
+      (file.settings as unknown[]).push({ key: "windowOpacity", value: "0.5" });
     });
     if (!result.ok) throw new Error(result.reason);
-    expect(result.backup.settings.map((s) => s.key).sort()).toEqual(["lastReminderDay", "reminders", "species"]);
+    expect(result.backup.settings.map((s) => s.key).sort()).toEqual(["lastReminderDay", "reminders", "species", "theme"]);
   });
 
   it("allows a coin balance of exactly zero", () => {
@@ -316,6 +317,7 @@ describe("parseBackup, rejecting a bad inventory or settings", () => {
     expect(reasonOf(setValue("species", "dog"))).toContain('"species"');
     expect(reasonOf(setValue("reminders", "yes"))).toContain('"reminders"');
     expect(reasonOf(setValue("lastReminderDay", "2026-13-01"))).toContain('"lastReminderDay"');
+    expect(reasonOf(setValue("theme", "neon"))).toContain('"theme"');
   });
 
   it("rejects a repeated known setting and a malformed setting", () => {
