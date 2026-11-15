@@ -160,6 +160,77 @@ describe("Character with accessories", () => {
   });
 });
 
+describe("Character with each new item", () => {
+  const items: [slot: keyof Equipped, key: string][] = [
+    ["hat", "knit_beanie"],
+    ["hat", "party_hat"],
+    ["hat", "gold_crown"],
+    ["glasses", "sunglasses"],
+    ["glasses", "monocle"],
+    ["held", "coffee_cup"],
+    ["held", "clipboard"],
+    ["held", "game_controller"],
+    ["background", "night_sky"],
+    ["background", "sunny_meadow"],
+  ];
+
+  it("changes the picture for both pets at every stage", () => {
+    for (const [slot, key] of items) {
+      for (const species of ["monkey", "cat"] as const) {
+        for (const stage of [1, 2, 3, 4] as Stage[]) {
+          const bare = html({ species, stage });
+          const worn = html({ species, stage, equipped: { ...noAccessories, [slot]: key } });
+          expect(worn, `${key} ${species} ${stage}`).not.toBe(bare);
+        }
+      }
+    }
+  });
+
+  it("wears one item per slot, in any combination", () => {
+    const outfit: Equipped = { hat: "gold_crown", glasses: "sunglasses", held: "game_controller", background: "night_sky" };
+    expect(html({ equipped: outfit })).not.toBe(html({ equipped: { ...outfit, hat: "knit_beanie" } }));
+  });
+});
+
+describe("Character background", () => {
+  const night: Equipped = { ...noAccessories, background: "night_sky" };
+  const petPart = (markup: string) => markup.slice(markup.indexOf('<div class="pet"'));
+
+  it("adds exactly one picture behind the pet, and none without a background", () => {
+    expect(count(html(), "<svg")).toBe(1);
+    expect(count(html({ equipped: night }), "<svg")).toBe(2);
+    expect(html()).not.toContain("pet-backdrop");
+    expect(html({ equipped: night })).toContain("pet-backdrop");
+  });
+
+  it("is outside the animated element, so the scenery never bobs or hops with the pet", () => {
+    const out = html({ equipped: night });
+    expect(out.indexOf("pet-backdrop")).toBeLessThan(out.indexOf('class="pet"'));
+    // the pet's own markup (the animated element and everything in it) is the same with or without it
+    expect(petPart(out)).toBe(petPart(html()));
+  });
+
+  it("is hidden from screen readers; the pet keeps its description", () => {
+    const out = html({ equipped: night });
+    expect(out).toMatch(/pet-backdrop" aria-hidden="true"/);
+    expect(out).toContain('aria-label="monkey, stage 1, feeling idle"');
+  });
+
+  it("stays a single scene during an evolve (two pet sprites over one background)", () => {
+    const out = html({ equipped: night, oneShot: { id: 5, kind: "evolve", toStage: 2 } });
+    expect(count(out, "<svg")).toBe(3);
+  });
+
+  it("is the same scene for both pets", () => {
+    const backdrop = (markup: string) => markup.slice(markup.indexOf("pet-backdrop"), markup.indexOf('<div class="pet"'));
+    expect(backdrop(html({ species: "cat", stage: 3, equipped: night }))).toBe(backdrop(html({ equipped: night })));
+  });
+
+  it("is drawn at the pet's size", () => {
+    expect(html({ equipped: night, size: 64 })).toMatch(/pet-backdrop"[^>]*><svg width="64" height="64"/);
+  });
+});
+
 describe("Character boundaries", () => {
   it("imports nothing from store/ or repositories/ (CLAUDE.md rule 6)", () => {
     const imports = characterSource.split("\n").filter((line: string) => line.startsWith("import"));
