@@ -16,8 +16,11 @@ const SLOT_LABEL: Record<Slot, string> = {
   background: "Background",
 };
 
-// One sprite pixel of an icon is this many screen pixels, so icons of any width stay crisp.
-const ICON_SCALE = 4;
+// The icon box is 56 px wide. One sprite pixel is a whole number of screen pixels (so icons stay crisp),
+// as many as fit in 52 px: a 12 px laptop is x4, 10 px glasses x5, a 16 px background thumbnail x3.
+const ICON_FIT = 52;
+const iconScale = (icon: readonly string[]) =>
+  Math.max(1, Math.floor(ICON_FIT / Math.max(icon.length, ...icon.map((row) => row.length))));
 
 // Presentational: the entry says what the card offers (buy, locked, equip, unequip); the parent runs the actions.
 export function ItemCard({ entry, onBuy, onToggleEquip }: ItemCardProps) {
@@ -37,7 +40,7 @@ export function ItemCard({ entry, onBuy, onToggleEquip }: ItemCardProps) {
     <div className="flex items-center gap-3 rounded-md border border-border bg-surface-raised p-2.5">
       <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-bg" aria-hidden="true">
         {icon !== undefined && (
-          <PixelSprite grid={icon} palette={ACCESSORY_PALETTE} size={Math.max(...icon.map((row) => row.length)) * ICON_SCALE} />
+          <PixelSprite grid={icon} palette={ACCESSORY_PALETTE} size={Math.max(...icon.map((row) => row.length)) * iconScale(icon)} />
         )}
       </div>
 
