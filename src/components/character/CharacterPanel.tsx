@@ -46,6 +46,8 @@ export function CharacterPanel() {
 
   return (
     <Panel id="character-heading" title={species === null ? "Pet" : SPECIES_LABEL[species]}>
+      {/* The pet and the tabs keep their place; only the tab content scrolls (the shop list is long). */}
+      <div className="flex h-full min-h-0 flex-col">
       {!settingsLoaded ? (
         // Same size as the pet (192 px), so nothing jumps when the saved choice arrives.
         <div className="mx-auto h-48 w-48" aria-hidden="true" />
@@ -82,7 +84,7 @@ export function CharacterPanel() {
 
       <PanelTabs active={tab} onChange={setTab} />
 
-      <div id={PET_TABPANEL_ID} role="tabpanel" aria-labelledby={petTabId(tab)} className="mt-4">
+      <div id={PET_TABPANEL_ID} role="tabpanel" aria-labelledby={petTabId(tab)} className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
         {tab === "stats" ? (
           <>
             <div className="flex items-center justify-between">
@@ -118,6 +120,7 @@ export function CharacterPanel() {
         ) : (
           <ShopPanel />
         )}
+      </div>
       </div>
     </Panel>
   );

@@ -59,3 +59,21 @@ export function shopEntries(items: Item[], owned: OwnedItem[], coins: number, le
     return { ...base, state: "locked-coins", missingCoins: item.price - coins } satisfies ShopEntry;
   });
 }
+
+/** The order the shop shows its groups in. */
+export const SLOT_ORDER: readonly Slot[] = ["hat", "glasses", "held", "background"];
+
+export interface ShopGroup {
+  slot: Slot;
+  entries: ShopEntry[];
+}
+
+/**
+ * Splits the shop entries into one group per slot, in a fixed order (hats, glasses, held items,
+ * backgrounds). A slot with no items is left out; inside a group the entries keep the order they came in.
+ */
+export function groupBySlot(entries: ShopEntry[]): ShopGroup[] {
+  return SLOT_ORDER.map((slot) => ({ slot, entries: entries.filter((entry) => entry.item.slot === slot) })).filter(
+    (group) => group.entries.length > 0,
+  );
+}

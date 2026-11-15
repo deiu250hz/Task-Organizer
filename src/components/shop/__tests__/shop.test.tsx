@@ -72,7 +72,32 @@ describe("ItemCard", () => {
 
   it("draws the icons at whole multiples of their width", () => {
     expect(card(entryFor(laptop, [], 0, 1))).toContain('width="48"'); // 12 px wide x 4
-    expect(card(entryFor(glasses, [], 0, 1))).toContain('width="40"'); // 10 px wide x 4
+    expect(card(entryFor(glasses, [], 0, 1))).toContain('width="50"'); // 10 px wide x 5, as many as fit in 52 px
+  });
+});
+
+describe("ItemCard icons of every size", () => {
+  const sizes: [string, string][] = [
+    ["knit_beanie", 'width="48" height="16"'], // 12 x 4 at x4
+    ["party_hat", 'width="48" height="24"'], // 8 x 4 at x6
+    ["gold_crown", 'width="44" height="16"'], // 11 x 4 at x4
+    ["sunglasses", 'width="50" height="25"'], // 10 x 5 at x5
+    ["monocle", 'width="50" height="30"'], // 10 x 6 at x5
+    ["coffee_cup", 'width="45" height="30"'], // 9 x 6 at x5
+    ["clipboard", 'width="48" height="48"'], // 8 x 8 at x6
+    ["game_controller", 'width="48" height="24"'], // 12 x 6 at x4
+    ["night_sky", 'width="48" height="48"'], // the 16 x 16 thumbnail at x3
+    ["sunny_meadow", 'width="48" height="48"'],
+  ];
+
+  it("draws every icon crisp (a whole number of screen pixels per sprite pixel) and inside the 54 px box", () => {
+    sizes.forEach(([assetKey, expected], i) => {
+      const item: Item = { id: 100 + i, slot: "hat", name: assetKey, price: 10, minLevel: 1, assetKey };
+      const html = card(entryFor(item, [], 0, 1));
+      expect(html, assetKey).toContain(expected);
+      const width = Number(/<svg width="(\d+)"/.exec(html)?.[1]);
+      expect(width, assetKey).toBeLessThanOrEqual(52);
+    });
   });
 });
 
@@ -110,6 +135,30 @@ describe("ShopPanel", () => {
     expect(html).toContain("Unlocks at level 5"); // fancy: locked by level
   });
 
+  it("groups the items under a heading per slot, in a fixed order", () => {
+    const beanie: Item = { id: 3, slot: "hat", name: "Knit Beanie", price: 25, minLevel: 1, assetKey: "knit_beanie" };
+    const sky: Item = { id: 4, slot: "background", name: "Night Sky", price: 80, minLevel: 4, assetKey: "night_sky" };
+    const html = renderWith({ items: [sky, laptop, glasses, beanie] }, <ShopPanel />);
+    const headings = [...html.matchAll(/<h4[^>]*>([^<]+)<\/h4>/g)].map((m) => m[1]);
+    expect(headings).toEqual(["Hats", "Glasses", "Held items", "Backgrounds"]);
+    expect(count(html, "<li")).toBe(4);
+    expect(count(html, "<section")).toBe(4);
+  });
+
+  it("leaves out the heading of a slot that has no items", () => {
+    const html = renderWith({ items: [glasses] }, <ShopPanel />);
+    expect(html).toContain(">Glasses<");
+    expect(html).not.toContain(">Hats<");
+    expect(html).not.toContain(">Backgrounds<");
+  });
+
+  it("links every group to its heading for screen readers", () => {
+    const html = renderWith({ items: [glasses, laptop] }, <ShopPanel />);
+    expect(html).toContain('aria-labelledby="shop-group-glasses"');
+    expect(html).toContain('id="shop-group-glasses"');
+    expect(html).toContain('aria-labelledby="shop-group-held"');
+  });
+
   it("says so when there is nothing for sale", () => {
     expect(renderWith({ items: [] }, <ShopPanel />)).toContain("Nothing for sale yet.");
   });
@@ -121,6 +170,12 @@ describe("ShopPanel", () => {
 
 describe("CharacterPanel with the shop", () => {
   const items = [glasses, laptop];
+
+  it("keeps the pet and the tabs outside the scrolling tab content", () => {
+    const html = renderWith({ items }, <CharacterPanel />);
+    expect(html).toContain("flex h-full min-h-0 flex-col");
+    expect(html).toMatch(/id="pet-tabpanel"[^>]*class="[^"]*overflow-y-auto/);
+  });
 
   it("opens on the Stats tab", () => {
     const html = renderWith({ items, totals: { xp: 0, coins: 5 } }, <CharacterPanel />);
